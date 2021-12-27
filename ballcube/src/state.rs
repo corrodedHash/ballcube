@@ -8,16 +8,22 @@ pub struct CompactState {
 
 fn transpose_gates(gates: u64) -> u64 {
     // http://programming.sirrida.de/calcperm.php
-    (gates & 0x00000111)
-        | ((gates & 0x00000022) << 2)
-        | ((gates & 0x00000004) << 4)
-        | ((gates & 0x00000040) >> 4)
-        | ((gates & 0x00000088) >> 2)
+    // 0 3 6 1 4 7 2 5 8 9 12 15 10 13 16 11 14 17 18 21 24 19 22 25 20 23 26 27 30 33 28 31 34 29 32 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63
+    (gates & 0xfffffff88c462311)
+        | ((gates & 0x0000000110884422) << 2)
+        | ((gates & 0x0000000020100804) << 4)
+        | ((gates & 0x0000000201008040) >> 4)
+        | ((gates & 0x0000000442211088) >> 2)
 }
 
-fn flip_row(row: u64) -> u64 {
-    row & 0b10 | (row << 2) & 0b100 | (row >> 2) & 0b1
+fn mirror_gates(gates: u64) -> u64 {
+    // http://programming.sirrida.de/calcperm.php
+    // 2 1 0 5 4 3 8 7 6 11 10 9 14 13 12 17 16 15 20 19 18 23 22 21 26 25 24 29 28 27 32 31 30 35 34 33 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63
+    (gates & 0xfffffff492492492)
+        | ((gates & 0x0000000249249249) << 2)
+        | ((gates & 0x0000000924924924) >> 2)
 }
+
 impl CompactState {
     pub fn build_from_board(board: &Board) -> Self {
         fn build_layer(board: &Board, layer: u8) -> u64 {
@@ -25,7 +31,7 @@ impl CompactState {
             for gate in 0..3 {
                 let mut gatebits = 1 << board.gatetype(layer, gate) & 0b111;
                 if !board.topleft(layer, gate) {
-                    gatebits = flip_row(gatebits)
+                    gatebits = mirror_gates(gatebits)
                 };
                 layer_bits |= gatebits << (gate * 3)
             }
@@ -54,45 +60,24 @@ impl CompactState {
     }
 
     pub fn shift_gate_raw(&mut self, board: &Board, layer: u8, gate: u8) {
-        fn handle_layer(mut layer_gates: u64, gate: u8, topleft: bool, horizontal: bool) -> u64 {
-            fn handle_row(mut gate_bits: u64, topleft: bool) -> u64 {
-                if !topleft {
-                    gate_bits = flip_row(gate_bits);
-                }
-                gate_bits = (gate_bits >> 1) | 0b100;
-                if !topleft {
-                    gate_bits = flip_row(gate_bits);
-                }
-                gate_bits
-            }
-            if !horizontal {
-                layer_gates = transpose_gates(layer_gates);
-            };
-            let gate_bitmask = 0b111 << (gate * 3);
-            let gate_bits = (layer_gates >> (gate * 3)) & 0b111;
-
-            layer_gates =
-                (layer_gates & !gate_bitmask) | handle_row(gate_bits, topleft) << (gate * 3);
-            if !horizontal {
-                layer_gates = transpose_gates(layer_gates)
-            };
-
-            layer_gates
-        }
-
         let gate_shift_bit_index = (layer * 9 + gate) * 2;
-        let gate_shift_mask = 0b11 << gate_shift_bit_index;
-        let new_gate_shift = ((self.gate_shifts >> gate_shift_bit_index) & 0b11) + 1;
-        debug_assert!(new_gate_shift < 3);
-        self.gate_shifts =
-            (self.gate_shifts & !(gate_shift_mask)) | (new_gate_shift << gate_shift_bit_index);
+        self.gate_shifts += 1 << gate_shift_bit_index;
 
         let h = board.layer_horizontal(layer);
         let t = board.topleft(layer, gate);
-        let layer_gates = (self.gates >> (layer * 9)) & 0b1_1111_1111_u64;
 
-        self.gates = (self.gates & !(0b1_1111_1111_u64 << (layer * 9)))
-            | (handle_layer(layer_gates, gate, t, h) << (layer * 9));
+        let mut gates = self.gates;
+        gates = if !h { transpose_gates(gates) } else { gates };
+        gates = if !t { mirror_gates(gates) } else { gates };
+
+        let gate_offset = layer * 9 + gate * 3;
+        let gate_mask = 0b111 << gate_offset;
+        gates = (gates & !gate_mask) | ((gates >> 1) & gate_mask) | (0b100 << gate_offset);
+
+        gates = if !t { mirror_gates(gates) } else { gates };
+        gates = if !h { transpose_gates(gates) } else { gates };
+
+        self.gates = gates;
     }
 
     pub fn shift_gate(&mut self, board: &Board, layer: u8, gate: u8) {
@@ -121,111 +106,25 @@ impl CompactState {
         ((self.gate_shifts >> ((layer * 9 + gate) * 2)) & 0b11) as u8
     }
 
+    pub fn get_gate_bits(&self) -> u64 {
+        self.gates
+    }
+
     pub fn drop_balls(&mut self) {
         while self.balls & self.gates != 0 {
             let dropped_balls = self.balls & self.gates;
             debug_assert_eq!(self.balls & dropped_balls, dropped_balls);
             debug_assert_eq!(self.balls & (dropped_balls << 9), 0);
-            self.balls ^= (dropped_balls | (dropped_balls << 9));
+            self.balls ^= dropped_balls | (dropped_balls << 9);
         }
     }
-}
-
-pub fn visualize_state(board: &Board, state: &CompactState) {
-    let first_row_char = "___";
-    let last_row_char = "‾‾‾";
-    let first_column_char = "|";
-    let last_column_char = "|";
-    let gold_char = "g";
-    let silver_char = "s";
-
-    let bottom_opposite = "↑";
-    let top_opposite = "↓";
-    let left_opposite = "→";
-    let right_opposite = "←";
-
-    let ball_char = "B";
-    let falling_ball_char = "F";
-    let blocked_char = "X";
-    let open_char = "O";
-
-    let shift_text_modifieds = [
-        "",
-        "\u{0332}",
-        "\u{0332}\u{0305}",
-        "\u{0332}\u{0305}\u{0336}",
-    ];
-
-    let mut result = "".to_owned();
-    let mut first_row = " ".to_owned();
-    let mut last_row = " ".to_owned();
-    for layer in 0..4 {
-        if board.layer_horizontal(layer) {
-            first_row += first_row_char;
-            last_row += last_row_char;
-        } else {
-            for gate in 0..3 {
-                let s = board.gates_silver[layer as usize][gate as usize];
-                let char = if s { silver_char } else { gold_char };
-                let char_styling = shift_text_modifieds[state.get_shift(layer, gate) as usize];
-
-                let char_owned = char.to_owned() + char_styling;
-                let char = char_owned.as_str();
-                let t = board.topleft(layer, gate);
-                let (fc, lc) = if t {
-                    (char, bottom_opposite)
-                } else {
-                    (top_opposite, char)
-                };
-                first_row += fc;
-                last_row += lc;
-            }
-        }
-
-        first_row += "   ";
-        last_row += "   ";
-    }
-    for row in 0..3 {
-        for layer in 0..4 {
-            let row_bits = (state.gates >> (layer * 9 + row * 3)) & 0b111;
-            let ball_bits = (state.balls >> (layer * 9 + row * 3)) & 0b111;
-            let mut row_str = "".to_owned();
-
-            let (first_char, last_char) = if board.layer_horizontal(layer) {
-                let gate_silver = board.gates_silver[layer as usize][row as usize];
-                let char = if gate_silver { silver_char } else { gold_char };
-
-                if board.topleft(layer, row) {
-                    (char, right_opposite)
-                } else {
-                    (left_opposite, char)
-                }
-            } else {
-                (first_column_char, last_column_char)
-            };
-            for row_bit in 0..3 {
-                let cell_blocked = (row_bits >> row_bit) & 1 == 0;
-                let ball_present = (ball_bits >> row_bit) & 1 == 1;
-                row_str += match (cell_blocked, ball_present) {
-                    (true, true) => ball_char,
-                    (true, false) => blocked_char,
-                    (false, true) => falling_ball_char,
-                    (false, false) => open_char,
-                }
-            }
-            result = format!("{result}{first_char}{row_str}{last_char} ");
-        }
-        result += "\n"
-    }
-    println!("{}\n{}{}\n", first_row, result, last_row);
 }
 
 #[cfg(test)]
 mod test {
-
+    use super::CompactState;
+    use crate::visualize_state::visualize_state;
     use crate::Board;
-
-    use super::{visualize_state, CompactState};
 
     fn generate_test_board() -> Board {
         Board {
