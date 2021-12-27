@@ -25,6 +25,7 @@ struct CompactState {
 }
 
 fn transpose_gates(gates: u64) -> u64 {
+    // http://programming.sirrida.de/calcperm.php
     (gates & 0x00000111)
         | ((gates & 0x00000022) << 2)
         | ((gates & 0x00000004) << 4)
