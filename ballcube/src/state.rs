@@ -1,27 +1,9 @@
-struct Board {
-    gold_balls: [u8; 4],
-    silver_balls: [u8; 4],
-    gates_horizontal: [bool; 4],
-    gates_topleft: [[bool; 3]; 4],
-    gates_silver: [[bool; 3]; 4],
-    gate_type: [[u8; 3]; 4],
-}
+use crate::Board;
 
-impl Board {
-    fn layer_horizontal(&self, layer_index: u8) -> bool {
-        self.gates_horizontal[layer_index as usize]
-    }
-    fn topleft(&self, layer_index: u8, gate_index: u8) -> bool {
-        self.gates_topleft[layer_index as usize][gate_index as usize]
-    }
-    fn gatetype(&self, layer_index: u8, gate_index: u8) -> u8 {
-        self.gate_type[layer_index as usize][gate_index as usize]
-    }
-}
-
-struct CompactState {
+pub struct CompactState {
     balls: u64,
     gates: u64,
+    gate_shifts: u64,
 }
 
 fn transpose_gates(gates: u64) -> u64 {
@@ -37,7 +19,7 @@ fn flip_row(row: u64) -> u64 {
     row & 0b10 | (row << 2) & 0b100 | (row >> 2) & 0b1
 }
 impl CompactState {
-    fn build_from_board(board: &Board) -> Self {
+    pub fn build_from_board(board: &Board) -> Self {
         fn build_layer(board: &Board, layer: u8) -> u64 {
             let mut layer_bits = 0;
             for gate in 0..3 {
@@ -62,12 +44,16 @@ impl CompactState {
             gates |= build_layer(board, layer) << (layer * 9);
         }
 
-        let mut result = Self { balls, gates };
+        let mut result = Self {
+            balls,
+            gates,
+            gate_shifts: 0,
+        };
         result.drop_balls();
         result
     }
 
-    fn shift_gate_raw(&mut self, board: &Board, layer: u8, gate: u8) {
+    pub fn shift_gate_raw(&mut self, board: &Board, layer: u8, gate: u8) {
         fn handle_layer(mut layer_gates: u64, gate: u8, topleft: bool, horizontal: bool) -> u64 {
             fn handle_row(mut gate_bits: u64, topleft: bool) -> u64 {
                 if !topleft {
@@ -93,6 +79,14 @@ impl CompactState {
 
             layer_gates
         }
+
+        let gate_shift_bit_index = (layer * 9 + gate) * 2;
+        let gate_shift_mask = 0b11 << gate_shift_bit_index;
+        let new_gate_shift = ((self.gate_shifts >> gate_shift_bit_index) & 0b11) + 1;
+        debug_assert!(new_gate_shift < 3);
+        self.gate_shifts =
+            (self.gate_shifts & !(gate_shift_mask)) | (new_gate_shift << gate_shift_bit_index);
+
         let h = board.layer_horizontal(layer);
         let t = board.topleft(layer, gate);
         let layer_gates = (self.gates >> (layer * 9)) & 0b1_1111_1111_u64;
@@ -101,12 +95,12 @@ impl CompactState {
             | (handle_layer(layer_gates, gate, t, h) << (layer * 9));
     }
 
-    fn shift_gate(&mut self, board: &Board, layer: u8, gate: u8) {
+    pub fn shift_gate(&mut self, board: &Board, layer: u8, gate: u8) {
         self.shift_gate_raw(board, layer, gate);
         self.drop_balls();
     }
 
-    fn depth(&self) -> [u8; 9] {
+    pub fn depth(&self) -> [u8; 9] {
         let mut ballmask = 1u64;
         for _ in 0..4 {
             ballmask <<= 9;
@@ -123,31 +117,66 @@ impl CompactState {
         result
     }
 
-    fn drop_balls(&mut self) {
+    pub fn get_shift(&self, layer: u8, gate: u8) -> u8 {
+        ((self.gate_shifts >> ((layer * 9 + gate) * 2)) & 0b11) as u8
+    }
+
+    pub fn drop_balls(&mut self) {
         while self.balls & self.gates != 0 {
             let dropped_balls = self.balls & self.gates;
             debug_assert_eq!(self.balls & dropped_balls, dropped_balls);
             debug_assert_eq!(self.balls & (dropped_balls << 9), 0);
-            self.balls ^= dropped_balls | (dropped_balls << 9);
+            self.balls ^= (dropped_balls | (dropped_balls << 9));
         }
     }
 }
 
-fn visualize_state(board: &Board, state: &CompactState) {
+pub fn visualize_state(board: &Board, state: &CompactState) {
+    let first_row_char = "___";
+    let last_row_char = "‾‾‾";
+    let first_column_char = "|";
+    let last_column_char = "|";
+    let gold_char = "g";
+    let silver_char = "s";
+
+    let bottom_opposite = "↑";
+    let top_opposite = "↓";
+    let left_opposite = "→";
+    let right_opposite = "←";
+
+    let ball_char = "B";
+    let falling_ball_char = "F";
+    let blocked_char = "X";
+    let open_char = "O";
+
+    let shift_text_modifieds = [
+        "",
+        "\u{0332}",
+        "\u{0332}\u{0305}",
+        "\u{0332}\u{0305}\u{0336}",
+    ];
+
     let mut result = "".to_owned();
     let mut first_row = " ".to_owned();
     let mut last_row = " ".to_owned();
     for layer in 0..4 {
         if board.layer_horizontal(layer) {
-            first_row += "___";
-            last_row += "‾‾‾";
+            first_row += first_row_char;
+            last_row += last_row_char;
         } else {
             for gate in 0..3 {
                 let s = board.gates_silver[layer as usize][gate as usize];
-                let char = if s { "S" } else { "G" };
+                let char = if s { silver_char } else { gold_char };
+                let char_styling = shift_text_modifieds[state.get_shift(layer, gate) as usize];
 
+                let char_owned = char.to_owned() + char_styling;
+                let char = char_owned.as_str();
                 let t = board.topleft(layer, gate);
-                let (fc, lc) = if t { (char, "↑") } else { ("↓", char) };
+                let (fc, lc) = if t {
+                    (char, bottom_opposite)
+                } else {
+                    (top_opposite, char)
+                };
                 first_row += fc;
                 last_row += lc;
             }
@@ -164,24 +193,24 @@ fn visualize_state(board: &Board, state: &CompactState) {
 
             let (first_char, last_char) = if board.layer_horizontal(layer) {
                 let gate_silver = board.gates_silver[layer as usize][row as usize];
-                let char = if gate_silver { "S" } else { "G" };
+                let char = if gate_silver { silver_char } else { gold_char };
 
                 if board.topleft(layer, row) {
-                    (char, "←")
+                    (char, right_opposite)
                 } else {
-                    ("→", char)
+                    (left_opposite, char)
                 }
             } else {
-                ("|", "|")
+                (first_column_char, last_column_char)
             };
             for row_bit in 0..3 {
                 let cell_blocked = (row_bits >> row_bit) & 1 == 0;
                 let ball_present = (ball_bits >> row_bit) & 1 == 1;
                 row_str += match (cell_blocked, ball_present) {
-                    (true, true) => "B",
-                    (true, false) => "X",
-                    (false, true) => "F",
-                    (false, false) => "O",
+                    (true, true) => ball_char,
+                    (true, false) => blocked_char,
+                    (false, true) => falling_ball_char,
+                    (false, false) => open_char,
                 }
             }
             result = format!("{result}{first_char}{row_str}{last_char} ");
@@ -193,9 +222,10 @@ fn visualize_state(board: &Board, state: &CompactState) {
 
 #[cfg(test)]
 mod test {
-    use crate::ballcube::visualize_state;
 
-    use super::{Board, CompactState};
+    use crate::Board;
+
+    use super::{visualize_state, CompactState};
 
     fn generate_test_board() -> Board {
         Board {
@@ -223,7 +253,7 @@ mod test {
         let b = generate_test_board();
         let mut s = CompactState::build_from_board(&b);
 
-        assert_eq!(s.balls, 0b0_1111_1111_u64);
+        assert_eq!(s.depth(), [0, 0, 0, 0, 0, 0, 0, 0, 4]);
         assert_eq!(s.gates & 0b1_1111_1111_u64, 0);
         visualize_state(&b, &s);
         s.shift_gate_raw(&b, 0, 0);
@@ -231,16 +261,19 @@ mod test {
         visualize_state(&b, &s);
         s.drop_balls();
         visualize_state(&b, &s);
-        assert_eq!(s.balls, 0b1000_1111_1011_u64, "{:b}", s.balls);
+        assert_eq!(s.depth(), [0, 0, 1, 0, 0, 0, 0, 0, 4]);
 
         s.shift_gate(&b, 1, 2);
+        assert_eq!(s.depth(), [0, 0, 2, 0, 0, 0, 0, 0, 4]);
         visualize_state(&b, &s);
 
         s.shift_gate(&b, 2, 0);
+        assert_eq!(s.depth(), [0, 0, 3, 0, 0, 0, 0, 0, 4]);
         visualize_state(&b, &s);
 
         s.shift_gate(&b, 3, 2);
         s.shift_gate(&b, 3, 2);
+        assert_eq!(s.depth(), [0, 0, 4, 0, 0, 0, 0, 0, 4]);
         visualize_state(&b, &s);
     }
 }
