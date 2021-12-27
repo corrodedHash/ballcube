@@ -32,12 +32,13 @@ fn transpose_gates(gates: u64) -> u64 {
         | ((gates & 0x00000040) >> 4)
         | ((gates & 0x00000088) >> 2)
 }
+
+fn flip_row(row: u64) -> u64 {
+    row & 0b10 | (row << 2) & 0b100 | (row >> 2) & 0b1
+}
 impl CompactState {
     fn build_from_board(board: &Board) -> Self {
         fn build_layer(board: &Board, layer: u8) -> u64 {
-            fn flip_row(row: u64) -> u64 {
-                row & 0b10 | (row << 2) & 0b100 | (row >> 2) & 0b1
-            }
             let mut layer_bits = 0;
             for gate in 0..3 {
                 let mut gatebits = 1 << board.gatetype(layer, gate) & 0b111;
@@ -67,31 +68,37 @@ impl CompactState {
     }
 
     fn shift_gate_raw(&mut self, board: &Board, layer: u8, gate: u8) {
+        fn handle_layer(mut layer_gates: u64, gate: u8, topleft: bool, horizontal: bool) -> u64 {
+            fn handle_row(mut gate_bits: u64, topleft: bool) -> u64 {
+                if !topleft {
+                    gate_bits = flip_row(gate_bits);
+                }
+                gate_bits = (gate_bits >> 1) | 0b100;
+                if !topleft {
+                    gate_bits = flip_row(gate_bits);
+                }
+                gate_bits
+            }
+            if !horizontal {
+                layer_gates = transpose_gates(layer_gates);
+            };
+            let gate_bitmask = 0b111 << (gate * 3);
+            let gate_bits = (layer_gates >> (gate * 3)) & 0b111;
+
+            layer_gates =
+                (layer_gates & !gate_bitmask) | handle_row(gate_bits, topleft) << (gate * 3);
+            if !horizontal {
+                layer_gates = transpose_gates(layer_gates)
+            };
+
+            layer_gates
+        }
         let h = board.layer_horizontal(layer);
         let t = board.topleft(layer, gate);
         let layer_gates = (self.gates >> (layer * 9)) & 0b1_1111_1111_u64;
-        let layer_gates = if h {
-            layer_gates
-        } else {
-            transpose_gates(layer_gates)
-        };
-        let gate_bitmask = 0b111 << (gate * 3);
 
-        let new_layer_gates = (layer_gates & !gate_bitmask)
-            | if t {
-                ((layer_gates >> 1) & gate_bitmask) | (0b100 << (gate * 3))
-            } else {
-                ((layer_gates << 1) & gate_bitmask) | (0b1 << (gate * 3))
-            };
-
-        let new_layer_gates = if h {
-            new_layer_gates
-        } else {
-            transpose_gates(new_layer_gates)
-        };
-
-        self.gates =
-            (self.gates & !(0b1_1111_1111_u64 << (layer * 9))) | (new_layer_gates << (layer * 9));
+        self.gates = (self.gates & !(0b1_1111_1111_u64 << (layer * 9)))
+            | (handle_layer(layer_gates, gate, t, h) << (layer * 9));
     }
 
     fn shift_gate(&mut self, board: &Board, layer: u8, gate: u8) {
@@ -136,18 +143,13 @@ fn visualize_state(board: &Board, state: &CompactState) {
             last_row += "‾‾‾";
         } else {
             for gate in 0..3 {
-                let char = if board.gates_silver[layer as usize][gate as usize] {
-                    "S"
-                } else {
-                    "G"
-                };
-                if board.topleft(layer, gate) {
-                    first_row += char;
-                    last_row += "-"
-                } else {
-                    first_row += "-";
-                    last_row += char;
-                }
+                let s = board.gates_silver[layer as usize][gate as usize];
+                let char = if s { "S" } else { "G" };
+
+                let t = board.topleft(layer, gate);
+                let (fc, lc) = if t { (char, "↑") } else { ("↓", char) };
+                first_row += fc;
+                last_row += lc;
             }
         }
 
@@ -163,15 +165,14 @@ fn visualize_state(board: &Board, state: &CompactState) {
             let (first_char, last_char) = if board.layer_horizontal(layer) {
                 let gate_silver = board.gates_silver[layer as usize][row as usize];
                 let char = if gate_silver { "S" } else { "G" };
-                let t = board.topleft(layer, row);
 
-                if t {
-                    (char, " ")
+                if board.topleft(layer, row) {
+                    (char, "←")
                 } else {
-                    (" ", char)
+                    ("→", char)
                 }
             } else {
-                (" ", " ")
+                ("|", "|")
             };
             for row_bit in 0..3 {
                 let cell_blocked = (row_bits >> row_bit) & 1 == 0;
@@ -232,14 +233,14 @@ mod test {
         visualize_state(&b, &s);
         assert_eq!(s.balls, 0b1000_1111_1011_u64, "{:b}", s.balls);
 
-        s.shift_gate(&b, 1,2);
+        s.shift_gate(&b, 1, 2);
         visualize_state(&b, &s);
 
-        s.shift_gate(&b, 2,0);
-        visualize_state(&b,&s);
+        s.shift_gate(&b, 2, 0);
+        visualize_state(&b, &s);
 
-        s.shift_gate(&b, 3,2);
-        s.shift_gate(&b, 3,2);
-        visualize_state(&b,&s);
+        s.shift_gate(&b, 3, 2);
+        s.shift_gate(&b, 3, 2);
+        visualize_state(&b, &s);
     }
 }
