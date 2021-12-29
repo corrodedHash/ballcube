@@ -7,8 +7,8 @@ pub struct MoveChecker {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Move {
-    layer: u8,
-    gate: u8,
+    pub layer: u8,
+    pub gate: u8,
 }
 impl Move {
     pub fn layer(&self) -> u8 {
@@ -45,19 +45,18 @@ impl MoveChecker {
             silver_gates: silver_gates.try_into().unwrap(),
         }
     }
-    pub fn moves(&self, state: &CompactState, p: Player) -> [Option<Move>; 6] {
+
+    pub fn moves(&self, state: &CompactState, p: Player) -> Vec<Move> {
         let gates = match p {
             Player::Gold => &self.gold_gates,
             Player::Silver => &self.silver_gates,
         };
-        let mut result = [None; 6];
-        let mut result_count = 0;
-        for (layer, gate) in gates.iter().copied() {
-            if state.get_shift(layer, gate) < 2 {
-                result[result_count] = Some(Move { layer, gate });
-                result_count += 1;
-            }
-        }
-        result
+
+        gates
+            .iter()
+            .copied()
+            .filter(|(a, b)| state.get_shift(*a, *b) < 2)
+            .map(|(layer, gate)| Move { layer, gate })
+            .collect()
     }
 }

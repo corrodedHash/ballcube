@@ -1,5 +1,6 @@
 use crate::Board;
 
+#[derive(Clone, Copy, Debug)]
 pub struct CompactState {
     balls: u64,
     gates: u64,

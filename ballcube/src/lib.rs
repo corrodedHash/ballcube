@@ -13,6 +13,7 @@ pub struct Board {
     gate_type: [[u8; 3]; 4],
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Player {
     Gold,
     Silver,

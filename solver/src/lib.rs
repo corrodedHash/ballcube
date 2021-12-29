@@ -1,21 +1,17 @@
+mod dfs;
 mod move_check;
 mod win_check;
 use ballcube::{Board, CompactState, Player};
-use move_check::MoveChecker;
+use move_check::{Move, MoveChecker};
 use win_check::WinningChecker;
 
-fn dfs_win(board: &Board, state: &CompactState, player: Player) {
-    let checker = WinningChecker::new(board);
-    let move_generator = MoveChecker::new(board);
-
-    let mut stack = vec![];
+fn other_player(player: Player) -> Player {
+    match player {
+        Player::Gold => Player::Silver,
+        Player::Silver => Player::Gold,
+    }
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
+fn random_board(moves: u8) -> (Board, State) {
+    
 }
