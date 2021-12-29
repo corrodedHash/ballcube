@@ -59,9 +59,17 @@ impl CompactState {
         result
     }
 
-    pub fn shift_gate_raw(&mut self, board: &Board, layer: u8, gate: u8) {
-        let gate_shift_bit_index = (layer * 9 + gate) * 2;
+    fn increment_gate_shift(&mut self, layer: u8, gate: u8) {
+        let gate_shift_bit_index = (layer * 3 + gate) * 2;
+        debug_assert!(self.get_shift(layer, gate) < 3);
+
         self.gate_shifts += 1 << gate_shift_bit_index;
+
+        debug_assert!(self.gate_shifts < (1 << 26));
+    }
+
+    pub fn shift_gate_raw(&mut self, board: &Board, layer: u8, gate: u8) {
+        self.increment_gate_shift(layer, gate);
 
         let h = board.layer_horizontal(layer);
         let t = board.topleft(layer, gate);
@@ -103,7 +111,16 @@ impl CompactState {
     }
 
     pub fn get_shift(&self, layer: u8, gate: u8) -> u8 {
-        ((self.gate_shifts >> ((layer * 9 + gate) * 2)) & 0b11) as u8
+        ((self.gate_shifts >> ((layer * 3 + gate) * 2)) & 0b11) as u8
+    }
+
+    pub fn shift_count(&self) -> u8 {
+        let it_one = (self.gate_shifts & 0x0033_3333) + ((self.gate_shifts & 0x00CC_CCCC) >> 2);
+        let it_two = (it_one & 0x000F_0F0F) + ((it_one & 0x00F0_F0F0) >> 4);
+        let it_three = (it_two & 0x00FF_00FF) + ((it_two & 0x0000_FF00) >> 8);
+        let it_four = (it_three & 0xFFFF) + (it_three >> 16);
+        debug_assert!(it_four <= 255, "{:b}", it_four);
+        it_four as u8
     }
 
     pub fn get_gate_bits(&self) -> u64 {
@@ -148,14 +165,18 @@ mod test {
     }
 
     #[test]
-    fn test_generation() {
+    fn test_shifting() {
         let b = generate_test_board();
         let mut s = CompactState::build_from_board(&b);
 
         assert_eq!(s.depth(), [0, 0, 0, 0, 0, 0, 0, 0, 4]);
         assert_eq!(s.gates & 0b1_1111_1111_u64, 0);
+        assert_eq!(s.shift_count(), 0);
         visualize_state(&b, &s);
         s.shift_gate_raw(&b, 0, 0);
+        assert_eq!(s.get_shift(0, 0), 1);
+        assert_eq!(s.shift_count(), 1);
+
         assert_eq!(s.gates & 0b1_1111_1111_u64, 0b0_0000_0100);
         visualize_state(&b, &s);
         s.drop_balls();
@@ -163,15 +184,27 @@ mod test {
         assert_eq!(s.depth(), [0, 0, 1, 0, 0, 0, 0, 0, 4]);
 
         s.shift_gate(&b, 1, 2);
+        assert_eq!(s.get_shift(1, 2), 1);
+        assert_eq!(s.shift_count(), 2);
+
         assert_eq!(s.depth(), [0, 0, 2, 0, 0, 0, 0, 0, 4]);
         visualize_state(&b, &s);
 
         s.shift_gate(&b, 2, 0);
+        assert_eq!(s.get_shift(2, 0), 1);
+        assert_eq!(s.shift_count(), 3);
+
         assert_eq!(s.depth(), [0, 0, 3, 0, 0, 0, 0, 0, 4]);
         visualize_state(&b, &s);
 
         s.shift_gate(&b, 3, 2);
+        assert_eq!(s.get_shift(3, 2), 1);
+        assert_eq!(s.shift_count(), 4);
+
         s.shift_gate(&b, 3, 2);
+        assert_eq!(s.get_shift(3, 2), 2);
+        assert_eq!(s.shift_count(), 5);
+
         assert_eq!(s.depth(), [0, 0, 4, 0, 0, 0, 0, 0, 4]);
         visualize_state(&b, &s);
     }

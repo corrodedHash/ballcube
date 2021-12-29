@@ -1,8 +1,8 @@
 use crate::{state::CompactState, Board};
 
 pub fn visualize_state(board: &Board, state: &CompactState) {
-    let first_row_char = "___";
-    let last_row_char = "‾‾‾";
+    let first_row_char = "_";
+    let last_row_char = "‾";
     let first_column_char = "|";
     let last_column_char = "|";
     let gold_char = "g";
@@ -13,79 +13,95 @@ pub fn visualize_state(board: &Board, state: &CompactState) {
     let left_opposite = "→";
     let right_opposite = "←";
 
+    // let corners_tl_tr_bl_br = ["┘", "└", "┐", "┌"];
+    let corners_tl_tr_bl_br = [" ", " ", " ", " "];
+
     let ball_char = "B";
     let falling_ball_char = "F";
     let blocked_char = "X";
     let open_char = "O";
 
-    let shift_text_modifieds = [
+    let shift_text_modifiers = [
         "",
         "\u{0332}",
         "\u{0332}\u{0305}",
         "\u{0332}\u{0305}\u{0336}",
     ];
 
-    let mut result = "".to_owned();
-    let mut first_row = " ".to_owned();
-    let mut last_row = " ".to_owned();
+    let mut result_lines: [String; 5] = Default::default();
 
     let ball_depth = state.depth();
+
+    let get_side_char = |layer: u8, gate: u8| -> String {
+        let owner_char = match board.gate(layer, gate) {
+            crate::Player::Gold => gold_char,
+            crate::Player::Silver => silver_char,
+        };
+        let char_styling = shift_text_modifiers[state.get_shift(layer, gate) as usize];
+        owner_char.to_owned() + char_styling
+    };
+
     for layer in 0..4 {
-        if board.layer_horizontal(layer) {
-            first_row += first_row_char;
-            last_row += last_row_char;
+        let mut first_column = [(); 3].map(|_| first_column_char.to_owned());
+        let mut last_column = [(); 3].map(|_| last_column_char.to_owned());
+        let mut first_row = [(); 3].map(|_| first_row_char.to_owned());
+        let mut last_row = [(); 3].map(|_| last_row_char.to_owned());
+        let mut field: [String; 9] = Default::default();
+
+        let (tl_side, br_side, tl_opp, br_opp) = if board.layer_horizontal(layer) {
+            (
+                &mut first_column,
+                &mut last_column,
+                left_opposite,
+                right_opposite,
+            )
         } else {
-            for gate in 0..3 {
-                let s = board.gates_silver[layer as usize][gate as usize];
-                let char = if s { silver_char } else { gold_char };
-                let char_styling = shift_text_modifieds[state.get_shift(layer, gate) as usize];
+            (&mut first_row, &mut last_row, top_opposite, bottom_opposite)
+        };
 
-                let char_owned = char.to_owned() + char_styling;
-                let char = char_owned.as_str();
-                let t = board.topleft(layer, gate);
-                let (fc, lc) = if t {
-                    (char, bottom_opposite)
-                } else {
-                    (top_opposite, char)
-                };
-                first_row += fc;
-                last_row += lc;
-            }
-        }
-
-        first_row += "   ";
-        last_row += "   ";
-    }
-    for row in 0..3 {
-        for layer in 0..4 {
-            let row_bits = (state.get_gate_bits() >> (layer * 9 + row * 3)) & 0b111;
-            let mut row_str = "".to_owned();
-
-            let (first_char, last_char) = if board.layer_horizontal(layer) {
-                let gate_silver = board.gates_silver[layer as usize][row as usize];
-                let char = if gate_silver { silver_char } else { gold_char };
-
-                if board.topleft(layer, row) {
-                    (char, right_opposite)
-                } else {
-                    (left_opposite, char)
-                }
+        for (gate, (tl, br)) in (0u8..).zip(tl_side.iter_mut().zip(br_side.iter_mut())) {
+            if board.topleft(layer, gate) {
+                *tl = get_side_char(layer, gate);
+                *br = br_opp.to_owned();
             } else {
-                (first_column_char, last_column_char)
-            };
-            for column in 0..3 {
-                let cell_blocked = (row_bits >> column) & 1 == 0;
-                let ball_present = ball_depth[(row * 3 + column) as usize] == layer;
-                row_str += match (cell_blocked, ball_present) {
-                    (true, true) => ball_char,
-                    (true, false) => blocked_char,
-                    (false, true) => falling_ball_char,
-                    (false, false) => open_char,
-                }
+                *tl = tl_opp.to_owned();
+                *br = get_side_char(layer, gate);
             }
-            result = format!("{result}{first_char}{row_str}{last_char} ");
         }
-        result += "\n"
+
+        for (id, (bd, cell)) in (0u8..).zip(ball_depth.iter().zip(field.iter_mut())) {
+            let ball_present = bd == &layer;
+            let hole_present = state.get_gate_bits() & (1 << (9 * layer + id)) > 0;
+
+            *cell = match (hole_present, ball_present) {
+                (false, true) => ball_char,
+                (false, false) => blocked_char,
+                (true, true) => falling_ball_char,
+                (true, false) => open_char,
+            }
+            .to_owned();
+        }
+
+        result_lines[0] += &format!(
+            "{}{}{} ",
+            corners_tl_tr_bl_br[0],
+            first_row.join(""),
+            corners_tl_tr_bl_br[1]
+        );
+        for i in 0..3 {
+            result_lines[i + 1] += &format!(
+                "{}{}{} ",
+                first_column[i],
+                field[(i * 3)..((i + 1) * 3)].join(""),
+                last_column[i]
+            );
+        }
+        result_lines[4] += &format!(
+            "{}{}{} ",
+            corners_tl_tr_bl_br[2],
+            last_row.join(""),
+            corners_tl_tr_bl_br[3]
+        );
     }
-    println!("{}\n{}{}\n", first_row, result, last_row);
+    println!("{}", result_lines.join("\n"));
 }
