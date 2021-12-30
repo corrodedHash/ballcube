@@ -19,7 +19,7 @@ pub struct BoardBuilder {
 }
 
 impl BoardBuilder {
-    fn finalize(mut self) -> Option<Board> {
+    pub fn finalize(self) -> Option<Board> {
         if self.gates_horizontal.iter().any(|x| x.is_none()) {
             return None;
         }
@@ -109,3 +109,4 @@ impl Board {
         self.gate_type[layer_index as usize][gate_index as usize]
     }
 }
+

@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 ballcube = { path = "../ballcube" }
+rand = "0.8.4"
