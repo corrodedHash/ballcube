@@ -7,8 +7,8 @@ pub struct MoveChecker {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Move {
-    pub layer: u8,
-    pub gate: u8,
+    layer: u8,
+    gate: u8,
 }
 impl Move {
     pub fn layer(&self) -> u8 {
@@ -55,7 +55,7 @@ impl MoveChecker {
         gates
             .iter()
             .copied()
-            .filter(|(a, b)| state.get_shift(*a, *b) < 2)
+            .filter(|(a, b)| state.get_shift(*a, *b) < 3)
             .map(|(layer, gate)| Move { layer, gate })
             .collect()
     }

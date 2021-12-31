@@ -1,4 +1,4 @@
-use crate::{state::CompactState, Board};
+use crate::{state::CompactState, Board, Player};
 
 pub fn visualize_state(board: &Board, state: &CompactState) {
     let first_row_char = "_";
@@ -16,8 +16,10 @@ pub fn visualize_state(board: &Board, state: &CompactState) {
     // let corners_tl_tr_bl_br = ["┘", "└", "┐", "┌"];
     let corners_tl_tr_bl_br = [" ", " ", " ", " "];
 
-    let ball_char = "B";
-    let falling_ball_char = "F";
+    let ball_char_gold = "G";
+    let ball_char_silver = "S";
+    let falling_ball_char_gold = "F";
+    let falling_ball_char_silver = "f";
     let blocked_char = "X";
     let open_char = "O";
 
@@ -72,12 +74,14 @@ pub fn visualize_state(board: &Board, state: &CompactState) {
         for (id, (bd, cell)) in (0u8..).zip(ball_depth.iter().zip(field.iter_mut())) {
             let ball_present = bd == &layer;
             let hole_present = state.get_gate_bits() & (1 << (9 * layer + id)) > 0;
-
-            *cell = match (hole_present, ball_present) {
-                (false, true) => ball_char,
-                (false, false) => blocked_char,
-                (true, true) => falling_ball_char,
-                (true, false) => open_char,
+            let ball_color = if !ball_present { None } else { board.ball(id) };
+            *cell = match (hole_present, ball_color) {
+                (false, Some(Player::Gold)) => ball_char_gold,
+                (false, Some(Player::Silver)) => ball_char_silver,
+                (false, None) => blocked_char,
+                (true, Some(Player::Gold)) => falling_ball_char_gold,
+                (true, Some(Player::Silver)) => falling_ball_char_silver,
+                (true, None) => open_char,
             }
             .to_owned();
         }

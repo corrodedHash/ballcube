@@ -1,10 +1,36 @@
-use crate::Board;
+use crate::{Board, Player};
 
 #[derive(Clone, Copy, Debug)]
 pub struct CompactState {
     balls: u64,
     gates: u64,
     gate_shifts: u64,
+}
+
+impl From<&CompactState> for u128 {
+    fn from(c: &CompactState) -> Self {
+        debug_assert!(c.gates.leading_zeros() >= (64 - 36));
+        debug_assert!(c.gate_shifts.leading_zeros() >= (64 - 24));
+        (c.balls as u128) | ((c.gates as u128) << 36) | ((c.gate_shifts as u128) << (36 + 36))
+    }
+}
+
+impl From<u128> for CompactState {
+    fn from(mut x: u128) -> Self {
+        let balls = (x & ((1 << 36) - 1)) as u64;
+        x >>= 36;
+        let gates = (x & ((1 << 36) - 1)) as u64;
+        x >>= 36;
+
+        let gate_shifts = (x & ((1 << 24) - 1)) as u64;
+        debug_assert_eq!(x >> 24, 0);
+
+        CompactState {
+            balls,
+            gates,
+            gate_shifts,
+        }
+    }
 }
 
 fn transpose_gates(gates: u64) -> u64 {
@@ -115,8 +141,8 @@ impl CompactState {
         ((self.gate_shifts >> ((layer * 3 + gate) * 2)) & 0b11) as u8
     }
 
-    pub fn shift_count(&self) -> u8 {
-        let it_one = (self.gate_shifts & 0x0033_3333) + ((self.gate_shifts & 0x00CC_CCCC) >> 2);
+    fn two_bit_array_add(tba: u64) -> u8 {
+        let it_one = (tba & 0x0033_3333) + ((tba & 0x00CC_CCCC) >> 2);
         let it_two = (it_one & 0x000F_0F0F) + ((it_one & 0x00F0_F0F0) >> 4);
         let it_three = (it_two & 0x00FF_00FF) + ((it_two & 0x0000_FF00) >> 8);
         let it_four = (it_three & 0xFFFF) + (it_three >> 16);
@@ -124,8 +150,25 @@ impl CompactState {
         it_four as u8
     }
 
+    pub fn shift_count(&self) -> u8 {
+        Self::two_bit_array_add(self.gate_shifts)
+    }
+
+    pub fn shift_count_silver(&self, board: &Board) -> u8 {
+        let mut silver_mask = 0u64;
+        for i in 0..12 {
+            if board.gate(i / 3, i % 3) == Player::Silver {
+                silver_mask |= 0b11 << (i * 2);
+            }
+        }
+        Self::two_bit_array_add(self.gate_shifts & silver_mask)
+    }
+
     pub fn get_gate_bits(&self) -> u64 {
         self.gates
+    }
+    pub fn get_ball_bits(&self) -> u64 {
+        self.balls
     }
 
     pub fn drop_balls(&mut self) {

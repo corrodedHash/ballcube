@@ -5,6 +5,7 @@ pub struct WinningChecker {
     silver_ball_mask: u64,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Winner {
     None,
     Both,
@@ -38,8 +39,8 @@ impl WinningChecker {
     }
 
     pub fn won(&self, state: &CompactState) -> Winner {
-        let gw = state.get_gate_bits() & self.gold_ball_mask == 0;
-        let sw = state.get_gate_bits() & self.silver_ball_mask == 0;
+        let gw = (state.get_ball_bits() & self.gold_ball_mask) == 0;
+        let sw = (state.get_ball_bits() & self.silver_ball_mask) == 0;
         match (gw, sw) {
             (false, false) => Winner::None,
             (true, false) => Winner::One(Player::Gold),
