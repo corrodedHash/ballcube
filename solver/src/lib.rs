@@ -1,7 +1,9 @@
-#[allow(dead_code)]
+#![allow(dead_code)]
+mod dependency;
 mod dfs;
 mod move_check;
 mod win_check;
+
 use ballcube::{Board, CompactState, Gate, Player};
 use move_check::Move;
 use rand::Rng;
