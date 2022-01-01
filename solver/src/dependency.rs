@@ -39,22 +39,30 @@ fn dependency(board: &Board, state: &CompactState, ball: u8) -> [Vec<u8>; 4] {
         if gatetype != 2 && s + ball_depth <= 3 {
             output.push(3 - s - ball_depth);
         }
-        // output.extend((s..=3).filter(|x| x + ball_depth >= 3).map(|x| x - s));
     }
     result
 }
 
 #[cfg(test)]
 mod test {
+    use super::{dependency, gate_id};
     use ballcube::{visualize_state, Board, CompactState};
 
-    use crate::dependency::dependency;
-    fn write_shifts(s: &[Vec<u8>; 4]) {
+    fn write_shifts(s: &[Vec<u8>; 4], board: &Board, cell: u8) {
         let x = s
             .iter()
-            .map(|layer| {
+            .enumerate()
+            .map(|(layer_index, layer)| {
+                let gate = gate_id(board.layer_horizontal(layer_index as u8), cell);
+                let gatecolor = board.gate(layer_index as u8, gate);
+                let gatecolor_str = match gatecolor {
+                    ballcube::Player::Gold => "G",
+                    ballcube::Player::Silver => "S",
+                };
                 format!(
-                    "{:<4}",
+                    "[{}{}] {:<4}",
+                    gatecolor_str,
+                    gate,
                     layer
                         .clone()
                         .iter()
@@ -67,12 +75,13 @@ mod test {
             .join("; ");
         println!("{}", x);
     }
+
     #[test]
     fn set_evaluation() {
         let board = Board::try_from(0xbf5230d34b00ce90b).unwrap();
         let state = CompactState::from(0x000081021430400002087b);
         for i in 0..9 {
-            write_shifts(&dependency(&board, &state, i));
+            write_shifts(&dependency(&board, &state, i), &board, i);
         }
         visualize_state(&board, &state);
         println!(
@@ -96,7 +105,7 @@ mod test {
         );
 
         for i in 0..9 {
-            write_shifts(&dependency(&board, &state, i));
+            write_shifts(&dependency(&board, &state, i), &board, i);
         }
     }
 }
