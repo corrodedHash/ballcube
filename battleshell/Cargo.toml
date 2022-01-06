@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 rustyline = "9.1.1"
 ballcube = { path = "../ballcube" }
+solver = { path = "../solver" }

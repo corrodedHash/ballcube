@@ -2,21 +2,21 @@ use crate::move_check::{Move, MoveChecker};
 use crate::win_check::{Winner, WinningChecker};
 use ballcube::{Board, CompactState, Player};
 
-struct DFSWinFinder<'a> {
+pub struct DFSWinFinder<'a> {
     checker: WinningChecker,
     move_generator: MoveChecker,
     board: &'a Board,
 }
 
 #[derive(Clone, Debug)]
-enum DFSEvaluation {
+pub enum DFSEvaluation {
     Win(Vec<Move>),
     Draw(Vec<Move>),
     Loss(Vec<Move>),
 }
 
 impl<'a> DFSWinFinder<'a> {
-    fn new(board: &'a Board) -> Self {
+    pub fn new(board: &'a Board) -> Self {
         let checker = WinningChecker::new(board);
         let move_generator = MoveChecker::new(board);
 
@@ -26,12 +26,14 @@ impl<'a> DFSWinFinder<'a> {
             board,
         }
     }
-    fn evaluate(&self, state: &CompactState, player: Player) -> DFSEvaluation {
+
+    pub fn evaluate(&self, state: &CompactState, player: Player) -> DFSEvaluation {
         let mut draw = None;
         let mut loss = None;
         for m in self.move_generator.moves(state, player) {
             let mut new_state = *state;
             new_state.shift_gate(self.board, m.layer(), m.gate());
+
             match self.checker.won(&new_state) {
                 Winner::None => (),
                 Winner::Both => {
@@ -44,15 +46,16 @@ impl<'a> DFSWinFinder<'a> {
                     continue;
                 }
             };
+
             let ev = self.evaluate(&new_state, player.other());
             match ev {
-                DFSEvaluation::Win(mut moves) => {
-                    moves.push(m);
-                    loss = Some(DFSEvaluation::Loss(moves))
-                }
                 DFSEvaluation::Loss(mut moves) => {
                     moves.push(m);
                     return DFSEvaluation::Win(moves);
+                }
+                DFSEvaluation::Win(mut moves) => {
+                    moves.push(m);
+                    loss = Some(DFSEvaluation::Loss(moves))
                 }
                 DFSEvaluation::Draw(mut moves) => {
                     moves.push(m);

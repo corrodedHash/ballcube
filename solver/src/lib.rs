@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 mod dependency;
-mod dfs;
+pub mod dfs;
 mod move_check;
 mod win_check;
 

@@ -48,8 +48,8 @@ mod test {
     use super::{dependency, gate_id};
     use ballcube::{visualize_state, Board, CompactState};
 
-    fn write_shifts(s: &[Vec<u8>; 4], board: &Board, cell: u8) {
-        let x = s
+    fn write_shifts(shift_possibilities: &[Vec<u8>; 4], board: &Board, cell: u8) -> String {
+        shift_possibilities
             .iter()
             .enumerate()
             .map(|(layer_index, layer)| {
@@ -72,8 +72,7 @@ mod test {
                 )
             })
             .collect::<Vec<String>>()
-            .join("; ");
-        println!("{}", x);
+            .join("; ")
     }
 
     #[test]
@@ -81,7 +80,14 @@ mod test {
         let board = Board::try_from(0xbf5230d34b00ce90b).unwrap();
         let state = CompactState::from(0x000081021430400002087b);
         for i in 0..9 {
-            write_shifts(&dependency(&board, &state, i), &board, i);
+            println!(
+                "{} {}",
+                board.ball(i).map_or("X", |x| match x {
+                    ballcube::Player::Gold => "G",
+                    ballcube::Player::Silver => "S",
+                }),
+                write_shifts(&dependency(&board, &state, i), &board, i)
+            );
         }
         visualize_state(&board, &state);
         println!(

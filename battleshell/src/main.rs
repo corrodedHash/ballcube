@@ -3,8 +3,6 @@ use ballcube::Board;
 fn build_shell() -> Option<Board> {
     let mut rl = rustyline::Editor::<()>::new();
 
-
-
     loop {
         let readline = rl.readline("build > ");
         // let readline = rl.readline("\u{1F6E0}> ");
