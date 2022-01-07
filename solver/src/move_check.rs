@@ -1,8 +1,8 @@
-use ballcube::{Board, CompactState, Player};
+use ballcube::{Board, Compact, Player};
 
 pub struct MoveChecker {
-    gold_gates: [(u8, u8); 6],
-    silver_gates: [(u8, u8); 6],
+    gold_gates: [Move; 6],
+    silver_gates: [Move; 6],
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -11,10 +11,10 @@ pub struct Move {
     gate: u8,
 }
 impl Move {
-    pub fn layer(&self) -> u8 {
+    pub fn layer(self) -> u8 {
         self.layer
     }
-    pub fn gate(&self) -> u8 {
+    pub fn gate(self) -> u8 {
         self.gate
     }
 }
@@ -28,10 +28,10 @@ impl MoveChecker {
             for gate in 0..3 {
                 match board.gate(layer, gate) {
                     Player::Gold => {
-                        gold_gates.push((layer, gate));
+                        gold_gates.push(Move { layer, gate });
                     }
                     Player::Silver => {
-                        silver_gates.push((layer, gate));
+                        silver_gates.push(Move { layer, gate });
                     }
                 }
             }
@@ -46,7 +46,7 @@ impl MoveChecker {
         }
     }
 
-    pub fn moves(&self, state: &CompactState, p: Player) -> Vec<Move> {
+    pub fn moves(&self, state: &Compact, p: Player) -> Vec<Move> {
         let gates = match p {
             Player::Gold => &self.gold_gates,
             Player::Silver => &self.silver_gates,
@@ -55,8 +55,7 @@ impl MoveChecker {
         gates
             .iter()
             .copied()
-            .filter(|(a, b)| state.get_shift(*a, *b) < 3)
-            .map(|(layer, gate)| Move { layer, gate })
+            .filter(|Move { layer, gate }| state.get_shift(*layer, *gate) < 3)
             .collect()
     }
 }

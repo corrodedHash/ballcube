@@ -1,7 +1,10 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+
 mod state;
 mod visualize_state;
 
-pub use state::CompactState;
+pub use state::Compact;
 pub use visualize_state::visualize_state;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -45,9 +48,11 @@ pub enum BoardBuildingError {
 }
 
 impl BoardBuilder {
+    /// # Errors
+    /// Will error when board is not properly defined yet
     pub fn finalize(self) -> Result<Board, BoardBuildingError> {
         let mut gates_horizontal = [false; 4];
-        for (id, (g, r)) in (0u8..).zip(
+        for (id, (g, r)) in (0_u8..).zip(
             self.gates_horizontal
                 .iter()
                 .zip(gates_horizontal.iter_mut()),
@@ -57,7 +62,7 @@ impl BoardBuilder {
 
         let (mut gates_topleft_v, mut gates_silver_v, mut gate_type_v) = (vec![], vec![], vec![]);
 
-        for (id, x) in (0u8..).zip(self.gates.iter()) {
+        for (id, x) in (0_u8..).zip(self.gates.iter()) {
             if let Some(g) = x {
                 gates_topleft_v.push(g.topleft);
                 gates_silver_v.push(g.allegiance == Player::Silver);
@@ -72,7 +77,7 @@ impl BoardBuilder {
         }
 
         let (mut gates_topleft, mut gates_silver, mut gate_type) =
-            ([[false; 3]; 4], [[false; 3]; 4], [[0u8; 3]; 4]);
+            ([[false; 3]; 4], [[false; 3]; 4], [[0_u8; 3]; 4]);
 
         for (id, (t, (s, ty))) in gates_topleft_v
             .into_iter()
@@ -127,7 +132,7 @@ impl BitPacker {
         I: Iterator<Item = u128>,
     {
         for i in vals {
-            debug_assert!(i.leading_zeros() as usize >= (128usize - stride));
+            debug_assert!(i.leading_zeros() as usize >= (128_usize - stride));
             self.result |= i << self.count;
             self.count += stride;
         }
@@ -138,10 +143,7 @@ impl From<&Board> for u128 {
     fn from(b: &Board) -> Self {
         let mut bp = BitPacker::default();
 
-        let btu = |x: &bool| match *x {
-            true => 1u128,
-            false => 0,
-        };
+        let btu = |x: &bool| if *x { 1_u128 } else { 0 };
 
         bp.pack((0..9).map(|x| btu(&b.gold_balls.contains(&x))), 1);
         bp.pack((0..9).map(|x| btu(&b.silver_balls.contains(&x))), 1);
@@ -180,7 +182,7 @@ impl TryFrom<u128> for Board {
             value >>= 1;
         }
 
-        for i in bb.gates_horizontal.iter_mut() {
+        for i in &mut bb.gates_horizontal {
             *i = Some((value & 1) == 1);
             value >>= 1;
         }
@@ -216,6 +218,7 @@ impl TryFrom<u128> for Board {
 }
 
 impl Board {
+    #[must_use]
     pub fn ball(&self, cell_index: u8) -> Option<Player> {
         let finder = move |x: &u8| *x == cell_index;
         if self.gold_balls.iter().any(finder) {
@@ -227,10 +230,12 @@ impl Board {
         }
     }
 
+    #[must_use]
     pub fn layer_horizontal(&self, layer_index: u8) -> bool {
         self.gates_horizontal[layer_index as usize]
     }
 
+    #[must_use]
     pub fn gate(&self, layer: u8, gate: u8) -> Player {
         if self.gates_silver[layer as usize][gate as usize] {
             Player::Silver
@@ -239,10 +244,12 @@ impl Board {
         }
     }
 
+    #[must_use]
     pub fn topleft(&self, layer_index: u8, gate_index: u8) -> bool {
         self.gates_topleft[layer_index as usize][gate_index as usize]
     }
 
+    #[must_use]
     pub fn gatetype(&self, layer_index: u8, gate_index: u8) -> u8 {
         self.gate_type[layer_index as usize][gate_index as usize]
     }

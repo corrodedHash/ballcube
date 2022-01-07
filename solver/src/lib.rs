@@ -1,10 +1,11 @@
+#![warn(clippy::pedantic)]
 #![allow(dead_code)]
-mod dependency;
+pub mod dependency;
 pub mod dfs;
 mod move_check;
 mod win_check;
 
-use ballcube::{Board, CompactState, Gate, Player};
+use ballcube::{Board, Compact, Gate, Player};
 use move_check::Move;
 use rand::Rng;
 
@@ -21,12 +22,12 @@ fn knuth_shuffle<T>(v: &mut [T]) {
 }
 
 fn random_board() -> Board {
-    let mut balls = (0u8..9).collect::<Vec<_>>();
+    let mut balls = (0_u8..9).collect::<Vec<_>>();
     knuth_shuffle(&mut balls);
 
     let gold_balls = balls[0..4].to_vec();
     let silver_balls = balls[4..8].to_vec();
-    let gate_types = [0u8, 0, 1, 2, 3, 3];
+    let gate_types = [0_u8, 0, 1, 2, 3, 3];
     let mut gold_gates = gate_types.to_vec();
     let mut silver_gates = gate_types.to_vec();
     let mut gate_distribution = vec![false; 6];
@@ -75,10 +76,10 @@ fn random_board() -> Board {
 
 fn random_moves(
     board: &Board,
-    state: &CompactState,
+    state: &Compact,
     moves: u8,
     starting_player: Player,
-) -> Vec<(CompactState, Move)> {
+) -> Vec<(Compact, Move)> {
     let move_generator = MoveChecker::new(board);
 
     (0..moves)

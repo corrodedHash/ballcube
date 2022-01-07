@@ -1,17 +1,17 @@
-use crate::{state::CompactState, Board, Player};
+use crate::{state::Compact, Board, Player};
 
-pub fn visualize_state(board: &Board, state: &CompactState) {
+pub fn visualize_state(board: &Board, state: &Compact) {
     let first_row_char = "_";
-    let last_row_char = "‾";
+    let last_row_char = "\u{203e}";
     let first_column_char = "|";
     let last_column_char = "|";
     let gold_char = "g";
     let silver_char = "s";
 
-    let bottom_opposite = "↑";
-    let top_opposite = "↓";
-    let left_opposite = "→";
-    let right_opposite = "←";
+    let bottom_opposite = "\u{2191}";
+    let top_opposite = "\u{2193}";
+    let left_opposite = "\u{2192}";
+    let right_opposite = "\u{2190}";
 
     // let corners_tl_tr_bl_br = ["┘", "└", "┐", "┌"];
     let corners_tl_tr_bl_br = [" ", " ", " ", " "];
@@ -61,7 +61,7 @@ pub fn visualize_state(board: &Board, state: &CompactState) {
             (&mut first_row, &mut last_row, top_opposite, bottom_opposite)
         };
 
-        for (gate, (tl, br)) in (0u8..).zip(tl_side.iter_mut().zip(br_side.iter_mut())) {
+        for (gate, (tl, br)) in (0_u8..).zip(tl_side.iter_mut().zip(br_side.iter_mut())) {
             if board.topleft(layer, gate) {
                 *tl = get_side_char(layer, gate);
                 *br = br_opp.to_owned();
@@ -71,10 +71,10 @@ pub fn visualize_state(board: &Board, state: &CompactState) {
             }
         }
 
-        for (id, (bd, cell)) in (0u8..).zip(ball_depth.iter().zip(field.iter_mut())) {
+        for (id, (bd, cell)) in (0_u8..).zip(ball_depth.iter().zip(field.iter_mut())) {
             let ball_present = bd == &layer;
             let hole_present = state.get_gate_bits() & (1 << (9 * layer + id)) > 0;
-            let ball_color = if !ball_present { None } else { board.ball(id) };
+            let ball_color = if ball_present { board.ball(id) } else { None };
             *cell = match (hole_present, ball_color) {
                 (false, Some(Player::Gold)) => ball_char_gold,
                 (false, Some(Player::Silver)) => ball_char_silver,

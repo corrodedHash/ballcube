@@ -1,4 +1,4 @@
-use ballcube::{Board, CompactState, Player};
+use ballcube::{Board, Compact, Player};
 
 pub struct WinningChecker {
     gold_ball_mask: u64,
@@ -14,8 +14,8 @@ pub enum Winner {
 
 impl WinningChecker {
     pub fn new(board: &Board) -> Self {
-        let mut gold_ball_mask = 0u64;
-        let mut silver_ball_mask = 0u64;
+        let mut gold_ball_mask = 0_u64;
+        let mut silver_ball_mask = 0_u64;
 
         for i in 0..9 {
             match board.ball(i) {
@@ -38,7 +38,7 @@ impl WinningChecker {
         }
     }
 
-    pub fn won(&self, state: &CompactState) -> Winner {
+    pub fn won(&self, state: &Compact) -> Winner {
         let gw = (state.get_ball_bits() & self.gold_ball_mask) == 0;
         let sw = (state.get_ball_bits() & self.silver_ball_mask) == 0;
         match (gw, sw) {
