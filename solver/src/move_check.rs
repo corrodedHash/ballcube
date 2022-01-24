@@ -26,14 +26,11 @@ impl MoveChecker {
 
         for layer in 0..4 {
             for gate in 0..3 {
-                match board.gate(layer, gate) {
-                    Player::Gold => {
-                        gold_gates.push(Move { layer, gate });
-                    }
-                    Player::Silver => {
-                        silver_gates.push(Move { layer, gate });
-                    }
-                }
+                let chosen_board = match board.gate(layer, gate) {
+                    Player::Gold => &mut gold_gates,
+                    Player::Silver => &mut silver_gates,
+                };
+                chosen_board.push(Move { layer, gate });
             }
         }
 

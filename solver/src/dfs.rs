@@ -210,49 +210,49 @@ mod test {
             state.shift_gate(board, m.layer(), m.gate());
         }
     }
-    #[test]
-    fn set_evaluation() {
-        let board = Board::try_from(0x0033_84c6_f527_b099_a923).unwrap();
-        let state = Compact::from(0xee3f_bafe_f3ff_7bf0_10c0_0840);
-        let start_player = Player::Silver;
-        let (ev_str, moves) = match DFSWinFinder::new(&board).evaluate(&state, start_player, true) {
-            crate::dfs::DFSEvaluation::Win(x) => ("Win", x),
-            crate::dfs::DFSEvaluation::Draw(x) => ("Draw", x),
-            crate::dfs::DFSEvaluation::Loss(x) => ("Loss", x),
-        };
+    // #[test]
+    // fn set_evaluation() {
+    //     let board = Board::try_from(0x0033_84c6_f527_b099_a923).unwrap();
+    //     let state = Compact::from(0xee3f_bafe_f3ff_7bf0_10c0_0840);
+    //     let start_player = Player::Silver;
+    //     let (ev_str, moves) = match DFSWinFinder::new(&board).evaluate(&state, start_player, true) {
+    //         crate::dfs::DFSEvaluation::Win(x) => ("Win", x),
+    //         crate::dfs::DFSEvaluation::Draw(x) => ("Draw", x),
+    //         crate::dfs::DFSEvaluation::Loss(x) => ("Loss", x),
+    //     };
 
-        let mut layer_string = "".to_owned();
-        let mut gate_string = "".to_owned();
-        let mut turn_string = "".to_owned();
+    //     let mut layer_string = "".to_owned();
+    //     let mut gate_string = "".to_owned();
+    //     let mut turn_string = "".to_owned();
 
-        for m in moves.moves().iter().copied() {
-            layer_string = format!("{} {}", layer_string, m.layer());
-            gate_string = format!("{} {}", gate_string, m.gate());
-            let p = match board.gate(m.layer(), m.gate()) {
-                Player::Gold => "G",
-                Player::Silver => "S",
-            };
-            turn_string = format!("{} {}", turn_string, p);
-        }
-        println!(
-            "{}\nPlayer: {}\nLayer:  {}\nGate:   {}",
-            ev_str, turn_string, layer_string, gate_string
-        );
+    //     for m in moves.moves().iter().copied() {
+    //         layer_string = format!("{} {}", layer_string, m.layer());
+    //         gate_string = format!("{} {}", gate_string, m.gate());
+    //         let p = match board.gate(m.layer(), m.gate()) {
+    //             Player::Gold => "G",
+    //             Player::Silver => "S",
+    //         };
+    //         turn_string = format!("{} {}", turn_string, p);
+    //     }
+    //     println!(
+    //         "{}\nPlayer: {}\nLayer:  {}\nGate:   {}",
+    //         ev_str, turn_string, layer_string, gate_string
+    //     );
 
-        visualize_state(&board, &state);
-        println!(
-            "Board: {:#018x}, State: {:#024x}",
-            u128::from(&board),
-            u128::from(&state)
-        );
+    //     visualize_state(&board, &state);
+    //     println!(
+    //         "Board: {:#018x}, State: {:#024x}",
+    //         u64::from(&board),
+    //         u128::from(&state)
+    //     );
 
-        assert_eq!(moves.starting_player(), start_player);
-        check_moves(&board, &state, &moves);
-    }
+    //     assert_eq!(moves.starting_player(), start_player);
+    //     check_moves(&board, &state, &moves);
+    // }
 
     #[test]
     fn random_evaluation() {
-        let board = crate::random_board();
+        let board = ballcube::Board::random();
         let state = Compact::build_from_board(&board);
 
         let mut state_stack = crate::random_moves(&board, &state, 36, Player::Silver);
@@ -287,7 +287,7 @@ mod test {
             println!(
                 "[{:02}] Board: {:#018x}, State: {:#024x}",
                 state_stack.len(),
-                u128::from(&board),
+                u64::from(&board),
                 u128::from(&chosen_state)
             );
 

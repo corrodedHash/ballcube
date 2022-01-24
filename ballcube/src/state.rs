@@ -51,6 +51,15 @@ fn mirror_gates(gates: u64) -> u64 {
         | ((gates & 0x0000_0009_2492_4924) >> 2)
 }
 
+fn two_bit_array_add(tba: u64) -> u8 {
+    let it_one = (tba & 0x0033_3333) + ((tba & 0x00CC_CCCC) >> 2);
+    let it_two = (it_one & 0x000F_0F0F) + ((it_one & 0x00F0_F0F0) >> 4);
+    let it_three = (it_two & 0x00FF_00FF) + ((it_two & 0x0000_FF00) >> 8);
+    let it_four = (it_three & 0xFFFF) + (it_three >> 16);
+    debug_assert!(it_four <= 255, "{:b}", it_four);
+    it_four as u8
+}
+
 impl Compact {
     #[must_use]
     pub fn build_from_board(board: &Board) -> Self {
@@ -69,7 +78,7 @@ impl Compact {
             layer_bits
         }
         let mut balls = 0_u64;
-        for ball in board.gold_balls.iter().chain(board.silver_balls.iter()) {
+        for ball in (0u8..9).filter(|x| board.ball(*x).is_some()) {
             balls |= 1 << ball;
         }
 
@@ -144,20 +153,13 @@ impl Compact {
         ((self.gate_shifts >> ((layer * 3 + gate) * 2)) & 0b11) as u8
     }
 
-    fn two_bit_array_add(tba: u64) -> u8 {
-        let it_one = (tba & 0x0033_3333) + ((tba & 0x00CC_CCCC) >> 2);
-        let it_two = (it_one & 0x000F_0F0F) + ((it_one & 0x00F0_F0F0) >> 4);
-        let it_three = (it_two & 0x00FF_00FF) + ((it_two & 0x0000_FF00) >> 8);
-        let it_four = (it_three & 0xFFFF) + (it_three >> 16);
-        debug_assert!(it_four <= 255, "{:b}", it_four);
-        it_four as u8
-    }
-
+    /// Sum the number of times each gate has been shifted
     #[must_use]
     pub fn shift_count(&self) -> u8 {
-        Self::two_bit_array_add(self.gate_shifts)
+        two_bit_array_add(self.gate_shifts)
     }
 
+    /// Sum shifts on gates which belong to silver
     #[must_use]
     pub fn shift_count_silver(&self, board: &Board) -> u8 {
         let mut silver_mask = 0_u64;
@@ -166,7 +168,7 @@ impl Compact {
                 silver_mask |= 0b11 << (i * 2);
             }
         }
-        Self::two_bit_array_add(self.gate_shifts & silver_mask)
+        two_bit_array_add(self.gate_shifts & silver_mask)
     }
 
     #[must_use]
@@ -192,28 +194,32 @@ impl Compact {
 #[cfg(test)]
 mod test {
     use super::Compact;
+    use crate::board::builder::Gate;
     use crate::visualize_state::visualize_state;
-    use crate::Board;
+    use crate::{Board, BoardBuilder};
 
     fn generate_test_board() -> Board {
-        Board {
-            gold_balls: [0, 1, 2, 3],
-            silver_balls: [4, 5, 6, 7],
-            gates_horizontal: [true, false, true, false],
-            gates_topleft: [
-                [true, true, false],
-                [false, true, true],
-                [true, false, false],
-                [false, false, true],
+        BoardBuilder {
+            gold_balls: [0, 1, 2, 3].to_vec(),
+            silver_balls: [4, 5, 6, 7].to_vec(),
+            gates_horizontal: [Some(true), Some(false), Some(true), Some(false)],
+            gates: [
+                Gate::build().s().t().ty(3).finalize(),
+                Gate::build().g().t().ty(3).finalize(),
+                Gate::build().g().b().ty(3).finalize(),
+                Gate::build().g().b().ty(0).finalize(),
+                Gate::build().g().t().ty(0).finalize(),
+                Gate::build().s().t().ty(1).finalize(),
+                Gate::build().s().t().ty(0).finalize(),
+                Gate::build().s().b().ty(1).finalize(),
+                Gate::build().g().b().ty(0).finalize(),
+                Gate::build().g().b().ty(3).finalize(),
+                Gate::build().s().b().ty(2).finalize(),
+                Gate::build().s().t().ty(2).finalize(),
             ],
-            gates_silver: [
-                [true, false, false],
-                [false, false, true],
-                [true, true, false],
-                [false, true, true],
-            ],
-            gate_type: [[3, 3, 3], [0, 0, 1], [0, 1, 0], [3, 2, 2]],
         }
+        .finalize()
+        .unwrap()
     }
 
     #[test]

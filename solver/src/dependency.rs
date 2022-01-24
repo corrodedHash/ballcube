@@ -81,36 +81,36 @@ fn shift_possibility_string(shift_possibilities: &[Vec<u8>; 4], board: &Board, c
 #[cfg(test)]
 mod test {
     use super::{dependency, shift_possibility_string};
-    use ballcube::{visualize_state, Board, Compact};
+    use ballcube::{visualize_state, Compact};
 
-    #[test]
-    fn set_evaluation() {
-        let board = Board::try_from(0x000b_f523_0d34_b00c_e90b).unwrap();
-        let state = Compact::from(0x0000_0081_0214_3040_0002_087b);
-        for i in 0..9 {
-            println!(
-                "{}",
-                shift_possibility_string(&dependency(&board, &state, i), &board, i)
-            );
-        }
-        visualize_state(&board, &state);
-        println!(
-            "Board: {:#018x}, State: {:#024x}",
-            u128::from(&board),
-            u128::from(&state)
-        );
-    }
+    // #[test]
+    // fn set_evaluation() {
+    //     let board = Board::try_from(0x000b_f523_0d34_b00c_e90b).unwrap();
+    //     let state = Compact::from(0x0000_0081_0214_3040_0002_087b);
+    //     for i in 0..9 {
+    //         println!(
+    //             "{}",
+    //             shift_possibility_string(&dependency(&board, &state, i), &board, i)
+    //         );
+    //     }
+    //     visualize_state(&board, &state);
+    //     println!(
+    //         "Board: {:#018x}, State: {:#024x}",
+    //         u64::from(&board),
+    //         u128::from(&state)
+    //     );
+    // }
 
     #[test]
     fn random_evaluation() {
-        let board = crate::random_board();
+        let board = ballcube::Board::random();
         let state = Compact::build_from_board(&board);
 
         visualize_state(&board, &state);
 
         println!(
             "Board: {:#018x}, State: {:#024x}",
-            u128::from(&board),
+            u64::from(&board),
             u128::from(&state)
         );
 
