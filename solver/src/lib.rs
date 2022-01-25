@@ -2,6 +2,8 @@
 #![allow(dead_code)]
 pub mod dependency;
 pub mod dfs;
+pub mod machine_learning;
+
 mod move_check;
 mod win_check;
 

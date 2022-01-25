@@ -30,12 +30,6 @@ impl MoveChain {
     }
 }
 
-pub struct DFSWinFinder<'a> {
-    checker: WinningChecker,
-    move_generator: MoveChecker,
-    board: &'a Board,
-}
-
 #[derive(Clone, Debug)]
 pub enum DFSEvaluation {
     Win(MoveChain),
@@ -113,6 +107,12 @@ impl PartialOrd for DFSEvaluation {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
+}
+
+pub struct DFSWinFinder<'a> {
+    checker: WinningChecker,
+    move_generator: MoveChecker,
+    board: &'a Board,
 }
 
 impl<'a> DFSWinFinder<'a> {
