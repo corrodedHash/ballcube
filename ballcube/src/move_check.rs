@@ -1,4 +1,4 @@
-use ballcube::{Board, Compact, Player};
+use crate::{Board, Compact, Player};
 
 pub struct MoveChecker {
     gold_gates: [Move; 6],
@@ -11,15 +11,20 @@ pub struct Move {
     gate: u8,
 }
 impl Move {
+    #[must_use]
     pub fn layer(self) -> u8 {
         self.layer
     }
+    #[must_use]
     pub fn gate(self) -> u8 {
         self.gate
     }
 }
 
 impl MoveChecker {
+    /// # Panics
+    /// Never
+    #[must_use]
     pub fn new(board: &Board) -> Self {
         let mut gold_gates = vec![];
         let mut silver_gates = vec![];
@@ -43,6 +48,7 @@ impl MoveChecker {
         }
     }
 
+    #[must_use]
     pub fn moves(&self, state: &Compact, p: Player) -> Vec<Move> {
         let gates = match p {
             Player::Gold => &self.gold_gates,

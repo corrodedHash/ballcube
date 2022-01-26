@@ -1,6 +1,4 @@
-use crate::move_check::{Move, MoveChecker};
-use crate::win_check::{Winner, WinningChecker};
-use ballcube::{Board, Compact, Player};
+use ballcube::{Board, Compact, Move, MoveChecker, Player, Winner, WinningChecker};
 
 #[derive(Clone, Debug)]
 pub struct MoveChain {
@@ -50,11 +48,19 @@ impl DFSEvaluation {
         };
         self
     }
-
+    #[must_use]
+    pub fn is_win(&self) -> bool {
+        match self {
+            DFSEvaluation::Win(_) => true,
+            DFSEvaluation::Draw(_) | DFSEvaluation::Loss(_) => false,
+        }
+    }
     fn add_move(&mut self, m: Move) {
         self.moves_mut().prepend(m);
     }
-    fn moves(&self) -> &MoveChain {
+
+    #[must_use]
+    pub fn moves(&self) -> &MoveChain {
         match self {
             Self::Win(x) | Self::Draw(x) | Self::Loss(x) => x,
         }
@@ -182,10 +188,7 @@ impl<'a> DFSWinFinder<'a> {
 mod test {
     use ballcube::{visualize_state, Board, Compact, Player};
 
-    use crate::{
-        dfs::DFSWinFinder,
-        win_check::{Winner, WinningChecker},
-    };
+    use crate::dfs::DFSWinFinder;
 
     use super::MoveChain;
 
@@ -255,12 +258,7 @@ mod test {
         let board = ballcube::Board::random();
         let state = Compact::build_from_board(&board);
 
-        let mut state_stack = crate::random_moves(&board, &state, 36, Player::Silver);
-
-        let win_checker = WinningChecker::new(&board);
-        while win_checker.won(&state_stack.last().unwrap().0) != Winner::None {
-            state_stack.pop();
-        }
+        let mut state_stack = state.random_game(&board, Player::Silver);
 
         while let Some(chosen_state) = state_stack.last() {
             let chosen_state = chosen_state.0;
@@ -288,7 +286,7 @@ mod test {
                 "[{:02}] Board: {:#018x}, State: {:#024x}",
                 state_stack.len(),
                 u64::from(&board),
-                u128::from(&chosen_state)
+                u64::from(&chosen_state)
             );
 
             check_moves(&board, &chosen_state, ev.moves());

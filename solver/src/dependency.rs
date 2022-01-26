@@ -83,23 +83,23 @@ mod test {
     use super::{dependency, shift_possibility_string};
     use ballcube::{visualize_state, Board, Compact};
 
-    #[test]
-    fn set_evaluation() {
-        let board = Board::try_from(0x48c7_8ff0_3e2b_5189).unwrap();
-        let state = Compact::from(0x0000_0031_410c_1000_0002_00fd);
-        for i in 0..9 {
-            println!(
-                "{}",
-                shift_possibility_string(&dependency(&board, &state, i), &board, i)
-            );
-        }
-        visualize_state(&board, &state);
-        println!(
-            "Board: {:#018x}, State: {:#024x}",
-            u64::from(&board),
-            u128::from(&state)
-        );
-    }
+    // #[test]
+    // fn set_evaluation() {
+    //     let board = Board::try_from(0x48c7_8ff0_3e2b_5189).unwrap();
+    //     let state = Compact::from(0x0000_0031_410c_1000_0002_00fd);
+    //     for i in 0..9 {
+    //         println!(
+    //             "{}",
+    //             shift_possibility_string(&dependency(&board, &state, i), &board, i)
+    //         );
+    //     }
+    //     visualize_state(&board, &state);
+    //     println!(
+    //         "Board: {:#018x}, State: {:#024x}",
+    //         u64::from(&board),
+    //         u128::from(&state)
+    //     );
+    // }
 
     #[test]
     fn random_evaluation() {
@@ -111,7 +111,7 @@ mod test {
         println!(
             "Board: {:#018x}, State: {:#024x}",
             u64::from(&board),
-            u128::from(&state)
+            u64::from(&state)
         );
 
         for i in 0..9 {

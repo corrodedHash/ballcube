@@ -175,18 +175,10 @@ impl Board {
     /// Never
     #[must_use]
     pub fn random() -> Self {
-        fn knuth_shuffle<T>(v: &mut [T]) {
-            let mut rng = rand::thread_rng();
-            let l = v.len();
-
-            for n in 0..l {
-                let i = rng.gen_range(0..l - n);
-                v.swap(i, l - n - 1);
-            }
-        }
+        use rand::seq::SliceRandom;
 
         let mut balls = (0_u8..9).collect::<Vec<_>>();
-        knuth_shuffle(&mut balls);
+        balls.shuffle(&mut rand::thread_rng());
 
         let gold_balls = balls[0..4].to_vec();
         let silver_balls = balls[4..8].to_vec();
@@ -195,10 +187,9 @@ impl Board {
         let mut silver_gates = gate_types.to_vec();
         let mut gate_distribution = vec![false; 6];
         gate_distribution.extend(vec![true; 6]);
-
-        knuth_shuffle(&mut gold_gates);
-        knuth_shuffle(&mut silver_gates);
-        knuth_shuffle(&mut gate_distribution);
+        gold_gates.shuffle(&mut rand::thread_rng());
+        silver_gates.shuffle(&mut rand::thread_rng());
+        gate_distribution.shuffle(&mut rand::thread_rng());
 
         let gates = gate_distribution
             .into_iter()

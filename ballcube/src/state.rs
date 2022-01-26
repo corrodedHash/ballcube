@@ -1,35 +1,23 @@
-use crate::{Board, Player};
+use rand::prelude::IteratorRandom;
 
-#[derive(Clone, Copy, Debug)]
+use crate::{Board, Move, MoveChecker, Player, Winner, WinningChecker};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Compact {
     balls: u64,
     gates: u64,
     gate_shifts: u64,
 }
 
-impl From<&Compact> for u128 {
+impl From<&Compact> for u64 {
     fn from(c: &Compact) -> Self {
-        debug_assert!(c.gates.leading_zeros() >= (64 - 36));
-        debug_assert!(c.gate_shifts.leading_zeros() >= (64 - 24));
-        u128::from(c.balls) | (u128::from(c.gates) << 36) | (u128::from(c.gate_shifts) << (36 + 36))
-    }
-}
-
-impl From<u128> for Compact {
-    fn from(mut x: u128) -> Self {
-        let balls = (x & ((1 << 36) - 1)) as u64;
-        x >>= 36;
-        let gates = (x & ((1 << 36) - 1)) as u64;
-        x >>= 36;
-
-        let gate_shifts = (x & ((1 << 24) - 1)) as u64;
-        debug_assert_eq!(x >> 24, 0);
-
-        Compact {
-            balls,
-            gates,
-            gate_shifts,
+        let ball_bitsize = u64::MAX.count_ones() - 5u64.pow(9).leading_zeros();
+        let mut ball_bits = 0u64;
+        for (index, ball) in (0..).zip(c.depth()) {
+            ball_bits += u64::from(ball) * 5u64.pow(index);
         }
+
+        ball_bits | c.gate_shifts << ball_bitsize
     }
 }
 
@@ -61,6 +49,57 @@ fn two_bit_array_add(tba: u64) -> u8 {
 }
 
 impl Compact {
+    #[must_use]
+    pub fn from_u64(mut int: u64, board: &Board) -> Self {
+        let mut result = Self::build_from_board(board);
+        let ball_bitsize = u64::MAX.count_ones() - 5u64.pow(9).leading_zeros();
+        let mut ball_bits = int & ((1u64 << ball_bitsize) - 1);
+        int >>= ball_bitsize;
+        let mut depths = [0; 9];
+        for current_depth in &mut depths {
+            *current_depth = ball_bits % 5;
+            ball_bits /= 5;
+        }
+        let gate_shifts = int;
+        for layer in 0..4 {
+            for gate in 0..3 {
+                for _ in 0..(int & 0b11) {
+                    result.shift_gate_raw(board, layer, gate);
+                }
+                int >>= 2;
+            }
+        }
+        debug_assert_eq!(result.gate_shifts, gate_shifts);
+        result.balls = 0;
+        for (index, ball) in (0..).zip(depths) {
+            result.balls |= 1 << (ball * 9 + index);
+        }
+        result
+    }
+
+    #[must_use]
+    pub fn random_game(mut self, board: &Board, starting_player: Player) -> Vec<(Compact, Move)> {
+        let move_generator = MoveChecker::new(board);
+        let win_checker = WinningChecker::new(board);
+        let mut result = vec![];
+        while win_checker.won(&self) == Winner::None {
+            let player = if result.len() % 2 == 0 {
+                starting_player
+            } else {
+                starting_player.other()
+            };
+            let m = *move_generator
+                .moves(&self, player)
+                .iter()
+                .choose(&mut rand::thread_rng())
+                .expect("No moves left, but no one won yet");
+
+            self.shift_gate(board, m.layer(), m.gate());
+            result.push((self, m));
+        }
+        result
+    }
+
     #[must_use]
     pub fn build_from_board(board: &Board) -> Self {
         fn build_layer(board: &Board, layer: u8) -> u64 {
@@ -196,7 +235,7 @@ mod test {
     use super::Compact;
     use crate::board::builder::Gate;
     use crate::visualize_state::visualize_state;
-    use crate::{Board, BoardBuilder};
+    use crate::{Board, BoardBuilder, Player};
 
     fn generate_test_board() -> Board {
         BoardBuilder {
@@ -265,5 +304,27 @@ mod test {
 
         assert_eq!(s.depth(), [0, 0, 4, 0, 0, 0, 0, 0, 4]);
         visualize_state(&b, &s);
+    }
+
+    #[test]
+    fn state_serialize() {
+        for i in 0..100 {
+            let board = crate::Board::random();
+            let initial_state = Compact::build_from_board(&board);
+            let states = initial_state.random_game(
+                &board,
+                if i % 2 == 0 {
+                    Player::Silver
+                } else {
+                    Player::Gold
+                },
+            );
+            for s in std::iter::once(initial_state).chain(states.iter().map(|x| x.0)) {
+                let serialized = u64::from(&s);
+                let deserialized_state = Compact::from_u64(serialized, &board);
+
+                assert_eq!(s, deserialized_state);
+            }
+        }
     }
 }

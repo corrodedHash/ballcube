@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use ballcube::Board;
 
 fn build_shell() -> Option<Board> {
@@ -19,7 +21,7 @@ fn build_shell() -> Option<Board> {
     None
 }
 
-fn main() {
+fn cli() {
     let mut rl = rustyline::Editor::<()>::new();
     loop {
         let readline = rl.readline("> ");
@@ -38,4 +40,8 @@ fn main() {
             }
         }
     }
+}
+
+fn main() {
+    solver::machine_learning::generate_case_list();
 }

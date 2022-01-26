@@ -2,8 +2,13 @@
 #![allow(clippy::cast_possible_truncation)]
 
 mod board;
+mod move_check;
 mod state;
 mod visualize_state;
+mod win_check;
+
+pub use move_check::{Move, MoveChecker};
+pub use win_check::{Winner, WinningChecker};
 
 pub use board::builder::{BoardBuilder, BoardBuildingError};
 pub use board::Board;
