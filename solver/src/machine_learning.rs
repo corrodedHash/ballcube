@@ -131,6 +131,7 @@ pub fn generate_case_list() {
 }
 
 #[test]
+#[ignore]
 fn bla() {
     use crate::dfs::DFSWinFinder;
     use ballcube::Board;

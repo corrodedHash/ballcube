@@ -40,7 +40,7 @@ impl WinningChecker {
     }
 
     #[must_use]
-    pub fn won(&self, state: &Compact) -> Winner {
+    pub const fn won(&self, state: &Compact) -> Winner {
         let gw = (state.get_ball_bits() & self.gold_ball_mask) == 0;
         let sw = (state.get_ball_bits() & self.silver_ball_mask) == 0;
         match (gw, sw) {

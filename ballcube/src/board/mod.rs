@@ -28,7 +28,7 @@ impl BitPacker {
         I: Iterator<Item = u64>,
     {
         for i in vals {
-            debug_assert!(i.leading_zeros() as usize >= (u64::MAX.count_ones() as usize - stride));
+            debug_assert!(i.leading_zeros() as usize >= (u64::BITS as usize - stride));
             self.result |= i << self.count;
             self.count += stride;
         }
@@ -51,7 +51,10 @@ impl From<&Board> for u64 {
         // 9 bit
         bp.pack((0..9).map(|x| btu(&b.gold_balls.contains(&x))), 1);
         // 3 bit
-        bp.pack(std::iter::once(u64::from(empty_cell - empty_cell_delta)), 3);
+        bp.pack(
+            std::iter::once(Self::from(empty_cell - empty_cell_delta)),
+            3,
+        );
         // 4 bit
         bp.pack(b.gates_horizontal.iter().map(btu), 1);
         // 12 bit
@@ -63,7 +66,7 @@ impl From<&Board> for u64 {
             b.gate_type
                 .iter()
                 .flat_map(|x| x.iter().copied())
-                .map(u64::from),
+                .map(Self::from),
             2,
         );
 
@@ -148,12 +151,12 @@ impl Board {
     }
 
     #[must_use]
-    pub fn layer_horizontal(&self, layer_index: u8) -> bool {
+    pub const fn layer_horizontal(&self, layer_index: u8) -> bool {
         self.gates_horizontal[layer_index as usize]
     }
 
     #[must_use]
-    pub fn gate(&self, layer: u8, gate: u8) -> Player {
+    pub const fn gate(&self, layer: u8, gate: u8) -> Player {
         if self.gates_silver[layer as usize][gate as usize] {
             Player::Silver
         } else {
@@ -162,12 +165,12 @@ impl Board {
     }
 
     #[must_use]
-    pub fn topleft(&self, layer_index: u8, gate_index: u8) -> bool {
+    pub const fn topleft(&self, layer_index: u8, gate_index: u8) -> bool {
         self.gates_topleft[layer_index as usize][gate_index as usize]
     }
 
     #[must_use]
-    pub fn gatetype(&self, layer_index: u8, gate_index: u8) -> u8 {
+    pub const fn gatetype(&self, layer_index: u8, gate_index: u8) -> u8 {
         self.gate_type[layer_index as usize][gate_index as usize]
     }
 
@@ -191,15 +194,15 @@ impl Board {
         silver_gates.shuffle(&mut rand::thread_rng());
         gate_distribution.shuffle(&mut rand::thread_rng());
 
-        let gates = gate_distribution
+        let gates_vec = gate_distribution
             .into_iter()
             .map(|silver| {
-                let t = if silver {
-                    silver_gates.pop()
+                let relevant_gate = if silver {
+                    &mut silver_gates
                 } else {
-                    gold_gates.pop()
-                }
-                .unwrap();
+                    &mut gold_gates
+                };
+                let t = relevant_gate.pop().unwrap();
 
                 Some(Gate {
                     allegiance: if silver { Player::Silver } else { Player::Gold },
@@ -208,20 +211,14 @@ impl Board {
                 })
             })
             .collect::<Vec<_>>();
-        let gates: [_; 12] = gates.try_into().unwrap();
+        let gates: [_; 12] = gates_vec.try_into().unwrap();
         let mut gates_horizontal = [true; 4];
         rand::thread_rng().fill(&mut gates_horizontal);
-        let gates_horizontal: [Option<bool>; 4] = gates_horizontal
-            .into_iter()
-            .map(Some)
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
+        let gates_horizontal_option: [Option<bool>; 4] = gates_horizontal.map(Some);
         crate::BoardBuilder {
             gold_balls,
             silver_balls,
-            gates_horizontal,
+            gates_horizontal: gates_horizontal_option,
             gates,
         }
         .finalize()
@@ -232,11 +229,13 @@ impl Board {
 #[cfg(test)]
 mod test {
     #[test]
+    #[allow(clippy::expect_used)]
     fn board_serialize() {
         for _ in 0..100 {
             let board = crate::Board::random();
             let serialized = u64::from(&board);
-            let deserialized_board = crate::Board::try_from(serialized).unwrap();
+            let deserialized_board =
+                crate::Board::try_from(serialized).expect("Could not deserialize board");
 
             assert_eq!(board, deserialized_board);
         }

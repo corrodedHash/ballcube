@@ -12,11 +12,11 @@ pub struct Move {
 }
 impl Move {
     #[must_use]
-    pub fn layer(self) -> u8 {
+    pub const fn layer(self) -> u8 {
         self.layer
     }
     #[must_use]
-    pub fn gate(self) -> u8 {
+    pub const fn gate(self) -> u8 {
         self.gate
     }
 }
@@ -58,7 +58,7 @@ impl MoveChecker {
         gates
             .iter()
             .copied()
-            .filter(|Move { layer, gate }| state.get_shift(*layer, *gate) < 3)
+            .filter(|&Move { layer, gate }| state.get_shift(layer, gate) < 3)
             .collect()
     }
 }

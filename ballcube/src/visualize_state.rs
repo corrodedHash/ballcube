@@ -40,7 +40,7 @@ pub fn visualize_state(board: &Board, state: &Compact) {
             crate::Player::Silver => silver_char,
         };
         let char_styling = shift_text_modifiers[state.get_shift(layer, gate) as usize];
-        owner_char.to_owned() + char_styling
+        format!("{owner_char}{char_styling}")
     };
 
     for layer in 0..4 {

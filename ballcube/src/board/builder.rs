@@ -90,7 +90,7 @@ impl BoardBuilder {
         let (mut gates_topleft_v, mut gates_silver_v, mut gate_type_v) = (vec![], vec![], vec![]);
 
         for (id, x) in (0_u8..).zip(self.gates.iter()) {
-            if let Some(g) = x {
+            if let Some(ref g) = *x {
                 gates_topleft_v.push(g.topleft);
                 gates_silver_v.push(g.allegiance == Player::Silver);
                 gate_type_v.push(g.gatetype);
@@ -121,12 +121,12 @@ impl BoardBuilder {
         let gold_balls = self
             .gold_balls
             .try_into()
-            .map_err(|_| BoardBuildingError::BallCountIncorrect)?;
+            .map_err(|_tryintoerr| BoardBuildingError::BallCountIncorrect)?;
 
         let silver_balls = self
             .silver_balls
             .try_into()
-            .map_err(|_| BoardBuildingError::BallCountIncorrect)?;
+            .map_err(|_tryintoerr| BoardBuildingError::BallCountIncorrect)?;
 
         Ok(Board {
             gold_balls,

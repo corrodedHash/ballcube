@@ -3,6 +3,8 @@ use rand::prelude::IteratorRandom;
 use crate::{Board, Move, MoveChecker, Player, Winner, WinningChecker};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Compact representation of the position of the balls and the gates.
+/// Complements a board which provides the placements of the gates and balls
 pub struct Compact {
     balls: u64,
     gates: u64,
@@ -11,17 +13,20 @@ pub struct Compact {
 
 impl From<&Compact> for u64 {
     fn from(c: &Compact) -> Self {
-        let ball_bitsize = u64::MAX.count_ones() - 5u64.pow(9).leading_zeros();
-        let mut ball_bits = 0u64;
-        for (index, ball) in (0..).zip(c.depth()) {
-            ball_bits += u64::from(ball) * 5u64.pow(index);
+        let ball_bitsize = Self::BITS - 5_u64.pow(9).leading_zeros();
+        let mut ball_bits = 0_u64;
+        let mut power_of_five = 1;
+
+        for ball in c.depth() {
+            ball_bits += Self::from(ball) * power_of_five;
+            power_of_five = power_of_five.saturating_mul(5);
         }
 
-        ball_bits | c.gate_shifts << ball_bitsize
+        ball_bits | (c.gate_shifts << ball_bitsize)
     }
 }
 
-fn transpose_gates(gates: u64) -> u64 {
+const fn transpose_gates(gates: u64) -> u64 {
     // http://programming.sirrida.de/calcperm.php
     // 0 3 6 1 4 7 2 5 8 9 12 15 10 13 16 11 14 17 18 21 24 19 22 25 20 23 26 27 30 33 28 31 34 29 32 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63
     (gates & 0xffff_fff8_8c46_2311)
@@ -31,7 +36,7 @@ fn transpose_gates(gates: u64) -> u64 {
         | ((gates & 0x0000_0004_4221_1088) >> 2)
 }
 
-fn mirror_gates(gates: u64) -> u64 {
+const fn mirror_gates(gates: u64) -> u64 {
     // http://programming.sirrida.de/calcperm.php
     // 2 1 0 5 4 3 8 7 6 11 10 9 14 13 12 17 16 15 20 19 18 23 22 21 26 25 24 29 28 27 32 31 30 35 34 33 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63
     (gates & 0xffff_fff4_9249_2492)
@@ -52,8 +57,8 @@ impl Compact {
     #[must_use]
     pub fn from_u64(mut int: u64, board: &Board) -> Self {
         let mut result = Self::build_from_board(board);
-        let ball_bitsize = u64::MAX.count_ones() - 5u64.pow(9).leading_zeros();
-        let mut ball_bits = int & ((1u64 << ball_bitsize) - 1);
+        let ball_bitsize = u64::BITS - 5_u64.pow(9).leading_zeros();
+        let mut ball_bits = int & ((1_u64 << ball_bitsize) - 1);
         int >>= ball_bitsize;
         let mut depths = [0; 9];
         for current_depth in &mut depths {
@@ -71,14 +76,19 @@ impl Compact {
         }
         debug_assert_eq!(result.gate_shifts, gate_shifts);
         result.balls = 0;
-        for (index, ball) in (0..).zip(depths) {
-            result.balls |= 1 << (ball * 9 + index);
+        for (index, depth) in (0..).zip(depths) {
+            if board.ball(index as u8).is_none() {
+                debug_assert_eq!(depth, 4);
+                continue;
+            }
+            result.balls |= 1_u64 << (depth * 9 + index);
+            println!("{:b}", result.balls);
         }
         result
     }
 
     #[must_use]
-    pub fn random_game(mut self, board: &Board, starting_player: Player) -> Vec<(Compact, Move)> {
+    pub fn random_game(mut self, board: &Board, starting_player: Player) -> Vec<(Self, Move)> {
         let move_generator = MoveChecker::new(board);
         let win_checker = WinningChecker::new(board);
         let mut result = vec![];
@@ -117,9 +127,12 @@ impl Compact {
             layer_bits
         }
         let mut balls = 0_u64;
-        for ball in (0u8..9).filter(|x| board.ball(*x).is_some()) {
+        for ball in (0_u8..9).filter(|x| board.ball(*x).is_some()) {
             balls |= 1 << ball;
         }
+        // for no_ball in (0_u8..9).filter(|x| board.ball(*x).is_none()) {
+        //     balls |= 1 << (no_ball + 4 * 9);
+        // }
 
         let mut gates = 0_u64;
         for layer in 0..4 {
@@ -188,7 +201,7 @@ impl Compact {
     }
 
     #[must_use]
-    pub fn get_shift(&self, layer: u8, gate: u8) -> u8 {
+    pub const fn get_shift(&self, layer: u8, gate: u8) -> u8 {
         ((self.gate_shifts >> ((layer * 3 + gate) * 2)) & 0b11) as u8
     }
 
@@ -211,12 +224,12 @@ impl Compact {
     }
 
     #[must_use]
-    pub fn get_gate_bits(&self) -> u64 {
+    pub const fn get_gate_bits(&self) -> u64 {
         self.gates
     }
 
     #[must_use]
-    pub fn get_ball_bits(&self) -> u64 {
+    pub const fn get_ball_bits(&self) -> u64 {
         self.balls
     }
 
@@ -237,6 +250,7 @@ mod test {
     use crate::visualize_state::visualize_state;
     use crate::{Board, BoardBuilder, Player};
 
+    #[allow(clippy::expect_used)]
     fn generate_test_board() -> Board {
         BoardBuilder {
             gold_balls: [0, 1, 2, 3].to_vec(),
@@ -258,7 +272,7 @@ mod test {
             ],
         }
         .finalize()
-        .unwrap()
+        .expect("Could not generate board")
     }
 
     #[test]
@@ -309,16 +323,14 @@ mod test {
     #[test]
     fn state_serialize() {
         for i in 0..100 {
+            let starting_player = if i & 1 == 0 {
+                Player::Silver
+            } else {
+                Player::Gold
+            };
             let board = crate::Board::random();
             let initial_state = Compact::build_from_board(&board);
-            let states = initial_state.random_game(
-                &board,
-                if i % 2 == 0 {
-                    Player::Silver
-                } else {
-                    Player::Gold
-                },
-            );
+            let states = initial_state.random_game(&board, starting_player);
             for s in std::iter::once(initial_state).chain(states.iter().map(|x| x.0)) {
                 let serialized = u64::from(&s);
                 let deserialized_state = Compact::from_u64(serialized, &board);
