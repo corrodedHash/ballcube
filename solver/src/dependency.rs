@@ -25,15 +25,13 @@ pub fn dependency(board: &Board, state: &Compact, ball: u8) -> [Vec<u8>; 4] {
         .zip(result.iter_mut())
         .skip(state.depth()[ball as usize] as usize)
     {
-        let gate = gate_id(board.layer_horizontal(layer_index), ball);
-        let s = state.get_shift(layer_index, gate);
-        let ball_depth = ball_depth(
-            board.topleft(layer_index, gate),
-            board.layer_horizontal(layer_index),
-            ball,
-        );
+        let layer = board.layer(layer_index);
+        let gate_id = gate_id(layer.horizontal(), ball);
+        let gate = layer.gate(gate_id);
+        let s = state.get_shift(layer_index, gate_id);
+        let ball_depth = ball_depth(gate.topleft(), layer.horizontal(), ball);
 
-        let gatetype = board.gatetype(layer_index, gate);
+        let gatetype = gate.gatetype();
         if gatetype != 3 && gatetype >= s && ball_depth <= (gatetype - s) {
             output.push(gatetype - s - ball_depth);
         }
@@ -47,9 +45,11 @@ pub fn dependency(board: &Board, state: &Compact, ball: u8) -> [Vec<u8>; 4] {
 fn shift_possibility_string(shift_possibilities: &[Vec<u8>; 4], board: &Board, cell: u8) -> String {
     let x = (0_u8..)
         .zip(shift_possibilities.iter())
-        .map(|(layer_index, layer)| {
-            let gate = gate_id(board.layer_horizontal(layer_index as u8), cell);
-            let gatecolor = board.gate(layer_index as u8, gate);
+        .map(|(layer_index, layer_ints)| {
+            let layer = board.layer(layer_index as u8);
+            let gate_id = gate_id(layer.horizontal(), cell);
+            let gate = layer.gate(gate_id);
+            let gatecolor = gate.owner();
             let gatecolor_str = match gatecolor {
                 ballcube::Player::Gold => "G",
                 ballcube::Player::Silver => "S",
@@ -57,8 +57,8 @@ fn shift_possibility_string(shift_possibilities: &[Vec<u8>; 4], board: &Board, c
             format!(
                 "[{}{}] {:<4}",
                 gatecolor_str,
-                gate,
-                layer
+                gate_id,
+                layer_ints
                     .clone()
                     .iter()
                     .map(|x| format!("{}", x))

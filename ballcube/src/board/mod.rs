@@ -35,15 +35,15 @@ impl BitPacker {
     }
 }
 
+#[allow(clippy::fallible_impl_from)]
 impl From<&Board> for u64 {
     fn from(b: &Board) -> Self {
         let mut bp = BitPacker::default();
 
         let btu = |x: &bool| if *x { 1_u64 } else { 0 };
 
-        let mut empty_cell_iterator = (0..9)
-            .filter(|x| !b.gold_balls.contains(x))
-            .filter(|x| !b.silver_balls.contains(x));
+        let mut empty_cell_iterator =
+            (0..9).filter(|x| !b.gold_balls.contains(x) && !b.silver_balls.contains(x));
         let empty_cell = empty_cell_iterator.next().unwrap();
         assert!(empty_cell_iterator.next().is_none());
         let empty_cell_delta = b.gold_balls.iter().filter(|x| x < &&empty_cell).count() as u8;
@@ -137,6 +137,54 @@ impl TryFrom<u64> for Board {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct LayerProxy<'board> {
+    layer_id: u8,
+    board: &'board Board,
+}
+
+impl<'board> LayerProxy<'board> {
+    #[must_use]
+    pub const fn horizontal(&self) -> bool {
+        self.board.gates_horizontal[self.layer_id as usize]
+    }
+    #[must_use]
+
+    pub const fn gate(&self, gate_id: u8) -> GateProxy<'board> {
+        GateProxy {
+            gate_id,
+            layer: *self,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct GateProxy<'layer> {
+    gate_id: u8,
+    layer: LayerProxy<'layer>,
+}
+
+impl<'layer> GateProxy<'layer> {
+    #[must_use]
+    pub const fn owner(&self) -> Player {
+        if self.layer.board.gates_silver[self.layer.layer_id as usize][self.gate_id as usize] {
+            Player::Silver
+        } else {
+            Player::Gold
+        }
+    }
+
+    #[must_use]
+    pub const fn topleft(&self) -> bool {
+        self.layer.board.gates_topleft[self.layer.layer_id as usize][self.gate_id as usize]
+    }
+
+    #[must_use]
+    pub const fn gatetype(&self) -> u8 {
+        self.layer.board.gate_type[self.layer.layer_id as usize][self.gate_id as usize]
+    }
+}
+
 impl Board {
     #[must_use]
     pub fn ball(&self, cell_index: u8) -> Option<Player> {
@@ -151,27 +199,11 @@ impl Board {
     }
 
     #[must_use]
-    pub const fn layer_horizontal(&self, layer_index: u8) -> bool {
-        self.gates_horizontal[layer_index as usize]
-    }
-
-    #[must_use]
-    pub const fn gate(&self, layer: u8, gate: u8) -> Player {
-        if self.gates_silver[layer as usize][gate as usize] {
-            Player::Silver
-        } else {
-            Player::Gold
+    pub const fn layer(&self, layer_id: u8) -> LayerProxy<'_> {
+        LayerProxy {
+            layer_id,
+            board: self,
         }
-    }
-
-    #[must_use]
-    pub const fn topleft(&self, layer_index: u8, gate_index: u8) -> bool {
-        self.gates_topleft[layer_index as usize][gate_index as usize]
-    }
-
-    #[must_use]
-    pub const fn gatetype(&self, layer_index: u8, gate_index: u8) -> u8 {
-        self.gate_type[layer_index as usize][gate_index as usize]
     }
 
     /// # Panics

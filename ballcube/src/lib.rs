@@ -1,21 +1,24 @@
 //! Storage and utility access function to a game of ballcube
-//!
-#![warn(clippy::pedantic, clippy::restriction)]
-#![warn(clippy::nursery)]
+
+#![warn(clippy::pedantic, clippy::nursery)]
+#![warn(clippy::restriction)]
+
+#![allow(clippy::blanket_clippy_restriction_lints)]
+
 #![allow(clippy::cast_possible_truncation)]
 #![allow(
-    clippy::integer_arithmetic,
-    clippy::integer_division,
-    clippy::implicit_return,
-    clippy::missing_inline_in_public_items,
+    clippy::as_conversions,
+    clippy::default_numeric_fallback,
     clippy::exhaustive_enums,
     clippy::exhaustive_structs,
-    clippy::separated_literal_suffix,
-    clippy::missing_docs_in_private_items,
-    clippy::mod_module_files,
-    clippy::default_numeric_fallback,
-    clippy::as_conversions,
+    clippy::implicit_return,
     clippy::indexing_slicing,
+    clippy::integer_arithmetic,
+    clippy::integer_division,
+    clippy::missing_docs_in_private_items,
+    clippy::missing_inline_in_public_items,
+    clippy::mod_module_files,
+    clippy::separated_literal_suffix,
     clippy::expect_used,
     clippy::unwrap_used
 )]

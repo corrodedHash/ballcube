@@ -35,7 +35,7 @@ pub fn visualize_state(board: &Board, state: &Compact) {
     let ball_depth = state.depth();
 
     let get_side_char = |layer: u8, gate: u8| -> String {
-        let owner_char = match board.gate(layer, gate) {
+        let owner_char = match board.layer(layer).gate(gate).owner() {
             crate::Player::Gold => gold_char,
             crate::Player::Silver => silver_char,
         };
@@ -50,7 +50,7 @@ pub fn visualize_state(board: &Board, state: &Compact) {
         let mut last_row = [(); 3].map(|_| last_row_char.to_owned());
         let mut field: [String; 9] = Default::default();
 
-        let (tl_side, br_side, tl_opp, br_opp) = if board.layer_horizontal(layer) {
+        let (tl_side, br_side, tl_opp, br_opp) = if board.layer(layer).horizontal() {
             (
                 &mut first_column,
                 &mut last_column,
@@ -62,7 +62,7 @@ pub fn visualize_state(board: &Board, state: &Compact) {
         };
 
         for (gate, (tl, br)) in (0_u8..).zip(tl_side.iter_mut().zip(br_side.iter_mut())) {
-            if board.topleft(layer, gate) {
+            if board.layer(layer).gate(gate).topleft() {
                 *tl = get_side_char(layer, gate);
                 *br = br_opp.to_owned();
             } else {

@@ -31,7 +31,7 @@ impl MoveChecker {
 
         for layer in 0..4 {
             for gate in 0..3 {
-                let chosen_board = match board.gate(layer, gate) {
+                let chosen_board = match board.layer(layer).gate(gate).owner() {
                     Player::Gold => &mut gold_gates,
                     Player::Silver => &mut silver_gates,
                 };

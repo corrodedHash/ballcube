@@ -1,28 +1,21 @@
-use rand::prelude::IteratorRandom;
+use rand::seq::IteratorRandom;
 
 use crate::{Board, Move, MoveChecker, Player, Winner, WinningChecker};
+mod ball_bitmask;
+use ball_bitmask::BallBitmask;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// Compact representation of the position of the balls and the gates.
 /// Complements a board which provides the placements of the gates and balls
 pub struct Compact {
-    balls: u64,
+    balls: BallBitmask,
     gates: u64,
     gate_shifts: u64,
 }
 
 impl From<&Compact> for u64 {
     fn from(c: &Compact) -> Self {
-        let ball_bitsize = Self::BITS - 5_u64.pow(9).leading_zeros();
-        let mut ball_bits = 0_u64;
-        let mut power_of_five = 1;
-
-        for ball in c.depth() {
-            ball_bits += Self::from(ball) * power_of_five;
-            power_of_five = power_of_five.saturating_mul(5);
-        }
-
-        ball_bits | (c.gate_shifts << ball_bitsize)
+        c.balls.compress() | (c.gate_shifts << BallBitmask::COMPRESSED_BITSIZE)
     }
 }
 
@@ -57,14 +50,11 @@ impl Compact {
     #[must_use]
     pub fn from_u64(mut int: u64, board: &Board) -> Self {
         let mut result = Self::build_from_board(board);
-        let ball_bitsize = u64::BITS - 5_u64.pow(9).leading_zeros();
-        let mut ball_bits = int & ((1_u64 << ball_bitsize) - 1);
-        int >>= ball_bitsize;
-        let mut depths = [0; 9];
-        for current_depth in &mut depths {
-            *current_depth = ball_bits % 5;
-            ball_bits /= 5;
-        }
+
+        let ball_bits = int & ((1_u64 << BallBitmask::COMPRESSED_BITSIZE) - 1);
+        int >>= BallBitmask::COMPRESSED_BITSIZE;
+        result.balls = BallBitmask::decompress(ball_bits, board);
+
         let gate_shifts = int;
         for layer in 0..4 {
             for gate in 0..3 {
@@ -75,15 +65,6 @@ impl Compact {
             }
         }
         debug_assert_eq!(result.gate_shifts, gate_shifts);
-        result.balls = 0;
-        for (index, depth) in (0..).zip(depths) {
-            if board.ball(index as u8).is_none() {
-                debug_assert_eq!(depth, 4);
-                continue;
-            }
-            result.balls |= 1_u64 << (depth * 9 + index);
-            println!("{:b}", result.balls);
-        }
         result
     }
 
@@ -112,16 +93,18 @@ impl Compact {
 
     #[must_use]
     pub fn build_from_board(board: &Board) -> Self {
-        fn build_layer(board: &Board, layer: u8) -> u64 {
+        fn build_layer(board: &Board, layer_id: u8) -> u64 {
             let mut layer_bits = 0;
-            for gate in 0..3 {
-                let mut gatebits = 1 << board.gatetype(layer, gate) & 0b111;
-                if !board.topleft(layer, gate) {
+            let layer = board.layer(layer_id);
+            for gate_id in 0..3 {
+                let gate = layer.gate(gate_id);
+                let mut gatebits = 1 << gate.gatetype() & 0b111;
+                if !gate.topleft() {
                     gatebits = mirror_gates(gatebits);
                 };
-                layer_bits |= gatebits << (gate * 3);
+                layer_bits |= gatebits << (gate_id * 3);
             }
-            if !board.layer_horizontal(layer) {
+            if !layer.horizontal() {
                 layer_bits = transpose_gates(layer_bits);
             }
             layer_bits
@@ -130,9 +113,6 @@ impl Compact {
         for ball in (0_u8..9).filter(|x| board.ball(*x).is_some()) {
             balls |= 1 << ball;
         }
-        // for no_ball in (0_u8..9).filter(|x| board.ball(*x).is_none()) {
-        //     balls |= 1 << (no_ball + 4 * 9);
-        // }
 
         let mut gates = 0_u64;
         for layer in 0..4 {
@@ -140,7 +120,7 @@ impl Compact {
         }
 
         let mut result = Self {
-            balls,
+            balls: BallBitmask::new(balls),
             gates,
             gate_shifts: 0,
         };
@@ -160,8 +140,8 @@ impl Compact {
     pub fn shift_gate_raw(&mut self, board: &Board, layer: u8, gate: u8) {
         self.increment_gate_shift(layer, gate);
 
-        let h = board.layer_horizontal(layer);
-        let t = board.topleft(layer, gate);
+        let h = board.layer(layer).horizontal();
+        let t = board.layer(layer).gate(gate).topleft();
 
         let mut gates = self.gates;
         gates = if h { gates } else { transpose_gates(gates) };
@@ -184,20 +164,7 @@ impl Compact {
 
     #[must_use]
     pub fn depth(&self) -> [u8; 9] {
-        let mut ballmask = 1_u64;
-        for _ in 0..4 {
-            ballmask <<= 9;
-            ballmask |= 1;
-        }
-        let mut result = [0_u8; 9];
-
-        for (i, r) in result.iter_mut().enumerate() {
-            let found_ball = self.balls & (ballmask << i);
-            debug_assert!(found_ball.count_ones() <= 1);
-            *r = std::cmp::min(found_ball.trailing_zeros() as u8 / 9, 4);
-        }
-
-        result
+        self.balls.depth()
     }
 
     #[must_use]
@@ -216,7 +183,7 @@ impl Compact {
     pub fn shift_count_silver(&self, board: &Board) -> u8 {
         let mut silver_mask = 0_u64;
         for i in 0..12 {
-            if board.gate(i / 3, i % 3) == Player::Silver {
+            if board.layer(i / 3).gate(i % 3).owner() == Player::Silver {
                 silver_mask |= 0b11 << (i * 2);
             }
         }
@@ -230,16 +197,11 @@ impl Compact {
 
     #[must_use]
     pub const fn get_ball_bits(&self) -> u64 {
-        self.balls
+        self.balls.get_mask()
     }
 
     pub fn drop_balls(&mut self) {
-        while self.balls & self.gates != 0 {
-            let dropped_balls = self.balls & self.gates;
-            debug_assert_eq!(self.balls & dropped_balls, dropped_balls);
-            debug_assert_eq!(self.balls & (dropped_balls << 9), 0);
-            self.balls ^= dropped_balls | (dropped_balls << 9);
-        }
+        self.balls.drop(self.gates);
     }
 }
 
@@ -253,9 +215,9 @@ mod test {
     #[allow(clippy::expect_used)]
     fn generate_test_board() -> Board {
         BoardBuilder {
-            gold_balls: [0, 1, 2, 3].to_vec(),
-            silver_balls: [4, 5, 6, 7].to_vec(),
-            gates_horizontal: [Some(true), Some(false), Some(true), Some(false)],
+            gold_balls: vec![0, 1, 2, 3],
+            silver_balls: vec![4, 5, 6, 7],
+            gates_horizontal: [true, false, true, false].map(Some),
             gates: [
                 Gate::build().s().t().ty(3).finalize(),
                 Gate::build().g().t().ty(3).finalize(),

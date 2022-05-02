@@ -200,7 +200,7 @@ mod test {
             } else {
                 moves.starting_player().other()
             };
-            if board.gate(m.layer(), m.gate()) != current_player {
+            if board.layer(m.layer()).gate(m.gate()).owner() != current_player {
                 dbg!(moves, i);
                 visualize_state(board, &state);
                 panic!("Move does not fit player");

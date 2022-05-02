@@ -30,15 +30,20 @@ fn generate_case(depth: usize) -> String {
     }
 
     for layer in 0..4 {
-        result.push(if board.layer_horizontal(layer) { 1 } else { 0 });
-        for gate in 0..3 {
-            let gate_owner = match board.gate(layer, gate) {
+        result.push(if board.layer(layer).horizontal() {
+            1
+        } else {
+            0
+        });
+        for gate_id in 0..3 {
+            let gate = board.layer(layer).gate(gate_id);
+            let gate_owner = match gate.owner() {
                 Player::Gold => 0,
                 Player::Silver => 1,
             };
-            let gate_type = board.gatetype(layer, gate);
-            let gate_topleft = board.topleft(layer, gate);
-            let gate_shift = state.get_shift(layer, gate);
+            let gate_type = gate.gatetype();
+            let gate_topleft = gate.topleft();
+            let gate_shift = state.get_shift(layer, gate_id);
 
             result.push(gate_owner);
             result.push(gate_type);
