@@ -6,6 +6,8 @@ use rand::Rng;
 
 use self::builder::Gate;
 
+use deku::prelude::*;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Board {
     gold_balls: [u8; 4],
@@ -35,6 +37,71 @@ impl BitPacker {
     }
 }
 
+#[derive(Debug, Clone, DekuRead, DekuWrite)]
+#[deku(endian = "endian", ctx = "endian: deku::ctx::Endian")]
+struct TwoWideInt(#[deku(bits = 2)] u8);
+
+#[derive(Debug, Clone, DekuRead, DekuWrite)]
+#[deku(endian = "endian", ctx = "endian: deku::ctx::Endian")]
+struct OneWideBool(#[deku(bits = 1)] bool);
+
+#[derive(Debug, Clone, DekuRead, DekuWrite)]
+#[deku(endian = "little")]
+struct CompressedBoard {
+    #[deku(count = "9")]
+    gold_balls: Vec<OneWideBool>,
+    #[deku(bits = 3)]
+    empty_cell_index: u8,
+    #[deku(count = "4")]
+    gates_horizontal: Vec<OneWideBool>,
+    #[deku(count = "12")]
+    gates_topleft: Vec<OneWideBool>,
+    #[deku(count = "12")]
+    gates_silver: Vec<OneWideBool>,
+    #[deku(count = "12")]
+    gates_type: Vec<TwoWideInt>,
+}
+
+#[allow(clippy::fallible_impl_from)]
+impl From<&Board> for CompressedBoard {
+    fn from(board: &Board) -> Self {
+        let empty_cell_iterator =
+            (0..9).find(|x| !board.gold_balls.contains(x) && !board.silver_balls.contains(x));
+        let empty_cell = empty_cell_iterator.unwrap();
+        let empty_cell_delta = board.gold_balls.iter().filter(|x| x < &&empty_cell).count() as u8;
+
+        Self {
+            gold_balls: (0..9)
+                .map(|x| board.gold_balls.contains(&x))
+                .map(OneWideBool)
+                .collect(),
+            empty_cell_index: empty_cell - empty_cell_delta,
+            gates_horizontal: board.gates_horizontal.map(OneWideBool).to_vec(),
+            gates_topleft: board
+                .gates_topleft
+                .iter()
+                .flat_map(|x| x.iter())
+                .copied()
+                .map(OneWideBool)
+                .collect(),
+            gates_silver: board
+                .gates_silver
+                .iter()
+                .flat_map(|x| x.iter())
+                .copied()
+                .map(OneWideBool)
+                .collect(),
+            gates_type: board
+                .gate_type
+                .iter()
+                .flat_map(|x| x.iter())
+                .copied()
+                .map(TwoWideInt)
+                .collect(),
+        }
+    }
+}
+
 #[allow(clippy::fallible_impl_from)]
 impl From<&Board> for u64 {
     fn from(b: &Board) -> Self {
@@ -42,10 +109,9 @@ impl From<&Board> for u64 {
 
         let btu = |x: &bool| if *x { 1_u64 } else { 0 };
 
-        let mut empty_cell_iterator =
-            (0..9).filter(|x| !b.gold_balls.contains(x) && !b.silver_balls.contains(x));
-        let empty_cell = empty_cell_iterator.next().unwrap();
-        assert!(empty_cell_iterator.next().is_none());
+        let empty_cell_iterator =
+            (0..9).find(|x| !b.gold_balls.contains(x) && !b.silver_balls.contains(x));
+        let empty_cell = empty_cell_iterator.unwrap();
         let empty_cell_delta = b.gold_balls.iter().filter(|x| x < &&empty_cell).count() as u8;
 
         // 9 bit
@@ -260,12 +326,18 @@ impl Board {
 
 #[cfg(test)]
 mod test {
+    use deku::DekuContainerWrite;
+
     #[test]
     #[allow(clippy::expect_used)]
     fn board_serialize() {
-        for _ in 0..100 {
+        for _ in 0..1 {
             let board = crate::Board::random();
             let serialized = u64::from(&board);
+            let x = crate::board::CompressedBoard::from(&board);
+            dbg!(board.gold_balls);
+            dbg!(x.to_bytes());
+            dbg!(serialized.to_be_bytes());
             let deserialized_board =
                 crate::Board::try_from(serialized).expect("Could not deserialize board");
 
