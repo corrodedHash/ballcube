@@ -1,12 +1,12 @@
 use crate::Player;
-
+use deku::{DekuContainerRead, DekuContainerWrite};
 pub mod builder;
+mod compressed;
+use compressed::CompressedBoard;
 
 use rand::Rng;
 
 use self::builder::Gate;
-
-use deku::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Board {
@@ -18,188 +18,23 @@ pub struct Board {
     gate_type: [[u8; 3]; 4],
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-struct BitPacker {
-    result: u64,
-    count: usize,
-}
-
-impl BitPacker {
-    fn pack<I>(&mut self, vals: I, stride: usize)
-    where
-        I: Iterator<Item = u64>,
-    {
-        for i in vals {
-            debug_assert!(i.leading_zeros() as usize >= (u64::BITS as usize - stride));
-            self.result |= i << self.count;
-            self.count += stride;
-        }
-    }
-}
-
-#[derive(Debug, Clone, DekuRead, DekuWrite)]
-#[deku(endian = "endian", ctx = "endian: deku::ctx::Endian")]
-struct TwoWideInt(#[deku(bits = 2)] u8);
-
-#[derive(Debug, Clone, DekuRead, DekuWrite)]
-#[deku(endian = "endian", ctx = "endian: deku::ctx::Endian")]
-struct OneWideBool(#[deku(bits = 1)] bool);
-
-#[derive(Debug, Clone, DekuRead, DekuWrite)]
-#[deku(endian = "little")]
-struct CompressedBoard {
-    #[deku(count = "9")]
-    gold_balls: Vec<OneWideBool>,
-    #[deku(bits = 3)]
-    empty_cell_index: u8,
-    #[deku(count = "4")]
-    gates_horizontal: Vec<OneWideBool>,
-    #[deku(count = "12")]
-    gates_topleft: Vec<OneWideBool>,
-    #[deku(count = "12")]
-    gates_silver: Vec<OneWideBool>,
-    #[deku(count = "12")]
-    gates_type: Vec<TwoWideInt>,
-}
-
-#[allow(clippy::fallible_impl_from)]
-impl From<&Board> for CompressedBoard {
-    fn from(board: &Board) -> Self {
-        let empty_cell_iterator =
-            (0..9).find(|x| !board.gold_balls.contains(x) && !board.silver_balls.contains(x));
-        let empty_cell = empty_cell_iterator.unwrap();
-        let empty_cell_delta = board.gold_balls.iter().filter(|x| x < &&empty_cell).count() as u8;
-
-        Self {
-            gold_balls: (0..9)
-                .map(|x| board.gold_balls.contains(&x))
-                .map(OneWideBool)
-                .collect(),
-            empty_cell_index: empty_cell - empty_cell_delta,
-            gates_horizontal: board.gates_horizontal.map(OneWideBool).to_vec(),
-            gates_topleft: board
-                .gates_topleft
-                .iter()
-                .flat_map(|x| x.iter())
-                .copied()
-                .map(OneWideBool)
-                .collect(),
-            gates_silver: board
-                .gates_silver
-                .iter()
-                .flat_map(|x| x.iter())
-                .copied()
-                .map(OneWideBool)
-                .collect(),
-            gates_type: board
-                .gate_type
-                .iter()
-                .flat_map(|x| x.iter())
-                .copied()
-                .map(TwoWideInt)
-                .collect(),
-        }
-    }
-}
-
 #[allow(clippy::fallible_impl_from)]
 impl From<&Board> for u64 {
-    fn from(b: &Board) -> Self {
-        let mut bp = BitPacker::default();
-
-        let btu = |x: &bool| if *x { 1_u64 } else { 0 };
-
-        let empty_cell_iterator =
-            (0..9).find(|x| !b.gold_balls.contains(x) && !b.silver_balls.contains(x));
-        let empty_cell = empty_cell_iterator.unwrap();
-        let empty_cell_delta = b.gold_balls.iter().filter(|x| x < &&empty_cell).count() as u8;
-
-        // 9 bit
-        bp.pack((0..9).map(|x| btu(&b.gold_balls.contains(&x))), 1);
-        // 3 bit
-        bp.pack(
-            std::iter::once(Self::from(empty_cell - empty_cell_delta)),
-            3,
-        );
-        // 4 bit
-        bp.pack(b.gates_horizontal.iter().map(btu), 1);
-        // 12 bit
-        bp.pack(b.gates_topleft.iter().flat_map(|x| x.iter()).map(btu), 1);
-        // 12 bit
-        bp.pack(b.gates_silver.iter().flat_map(|x| x.iter()).map(btu), 1);
-        // 24 bit
-        bp.pack(
-            b.gate_type
-                .iter()
-                .flat_map(|x| x.iter().copied())
-                .map(Self::from),
-            2,
-        );
-
-        bp.result
+    fn from(board: &Board) -> Self {
+        let compressed = CompressedBoard::from(board);
+        let mut bytes = compressed.to_bytes().unwrap();
+        bytes.resize(8, 0);
+        Self::from_le_bytes(bytes.try_into().unwrap())
     }
 }
 
 impl TryFrom<u64> for Board {
-    type Error = builder::BoardBuildingError;
+    type Error = ();
 
-    fn try_from(mut value: u64) -> Result<Self, Self::Error> {
-        let mut bb = builder::BoardBuilder::default();
-
-        for i in 0..9 {
-            if (value & 1) == 1 {
-                bb.gold_balls.push(i);
-            }
-            value >>= 1;
-        }
-
-        let mut empty_cell_compressed = (value & 0b111) as u8;
-        value >>= 3;
-
-        for gb in &bb.gold_balls {
-            if gb <= &empty_cell_compressed {
-                empty_cell_compressed += 1;
-            } else {
-                break;
-            }
-        }
-
-        let empty_cell = empty_cell_compressed as u8;
-        let silver_balls = (0..9).filter(|x| !bb.gold_balls.contains(x) && x != &empty_cell);
-        bb.silver_balls.extend(silver_balls);
-
-        for i in &mut bb.gates_horizontal {
-            *i = Some((value & 1) == 1);
-            value >>= 1;
-        }
-
-        let (mut topleft, mut sg, mut ty) = (vec![], vec![], vec![]);
-
-        for _ in 0..12 {
-            topleft.push((value & 1) == 1);
-            value >>= 1;
-        }
-        for _ in 0..12 {
-            sg.push((value & 1) == 1);
-            value >>= 1;
-        }
-        for _ in 0..12 {
-            ty.push(value & 0b11);
-            value >>= 2;
-        }
-
-        for ((a, (b, c)), g) in topleft
-            .into_iter()
-            .zip(sg.into_iter().zip(ty.into_iter()))
-            .zip(bb.gates.iter_mut())
-        {
-            *g = Some(builder::Gate {
-                allegiance: if b { Player::Silver } else { Player::Gold },
-                topleft: a,
-                gatetype: c as u8,
-            });
-        }
-        bb.finalize()
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        let bytes = value.to_le_bytes();
+        let (_, compressed) = CompressedBoard::from_bytes((&bytes, 0)).map_err(|_x| ())?;
+        Self::try_from(compressed)
     }
 }
 
@@ -326,18 +161,13 @@ impl Board {
 
 #[cfg(test)]
 mod test {
-    use deku::DekuContainerWrite;
-
     #[test]
     #[allow(clippy::expect_used)]
     fn board_serialize() {
-        for _ in 0..1 {
+        for _ in 0..100 {
             let board = crate::Board::random();
             let serialized = u64::from(&board);
-            let x = crate::board::CompressedBoard::from(&board);
-            dbg!(board.gold_balls);
-            dbg!(x.to_bytes());
-            dbg!(serialized.to_be_bytes());
+
             let deserialized_board =
                 crate::Board::try_from(serialized).expect("Could not deserialize board");
 
