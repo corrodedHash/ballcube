@@ -6,7 +6,7 @@ use compressed::CompressedBoard;
 
 use rand::Rng;
 
-use self::builder::Gate;
+use self::{builder::Gate, compressed::IncorrectCompBoardError};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Board {
@@ -22,19 +22,29 @@ pub struct Board {
 impl From<&Board> for u64 {
     fn from(board: &Board) -> Self {
         let compressed = CompressedBoard::from(board);
-        let mut bytes = compressed.to_bytes().unwrap();
-        bytes.resize(8, 0);
+        let bytes = compressed.to_bytes().unwrap();
+        debug_assert_eq!(bytes.len(), 8);
+        // bytes.resize(8, 0);
         Self::from_le_bytes(bytes.try_into().unwrap())
     }
 }
 
+#[derive(thiserror::Error, Debug, Clone)]
+pub enum DeserializationError {
+    #[error("Could not read bitstring")]
+    IncorrectBitstring,
+    #[error("Deserialized board incorrect: {0}")]
+    IncorrectBoard(#[from] IncorrectCompBoardError),
+}
+
 impl TryFrom<u64> for Board {
-    type Error = ();
+    type Error = DeserializationError;
 
     fn try_from(value: u64) -> Result<Self, Self::Error> {
         let bytes = value.to_le_bytes();
-        let (_, compressed) = CompressedBoard::from_bytes((&bytes, 0)).map_err(|_x| ())?;
-        Self::try_from(compressed)
+        let (_, compressed) = CompressedBoard::from_bytes((&bytes, 0))
+            .map_err(|_x| DeserializationError::IncorrectBitstring)?;
+        Ok(Self::try_from(compressed)?)
     }
 }
 
@@ -49,8 +59,8 @@ impl<'board> LayerProxy<'board> {
     pub const fn horizontal(&self) -> bool {
         self.board.gates_horizontal[self.layer_id as usize]
     }
-    #[must_use]
 
+    #[must_use]
     pub const fn gate(&self, gate_id: u8) -> GateProxy<'board> {
         GateProxy {
             gate_id,
@@ -167,7 +177,6 @@ mod test {
         for _ in 0..100 {
             let board = crate::Board::random();
             let serialized = u64::from(&board);
-
             let deserialized_board =
                 crate::Board::try_from(serialized).expect("Could not deserialize board");
 
