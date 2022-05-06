@@ -1,32 +1,5 @@
 use ballcube::{Board, Compact, Move, MoveChecker, Player, Winner, WinningChecker};
-
-#[derive(Clone, Debug)]
-pub struct MoveChain {
-    chain: Vec<Move>,
-    starting_player: Player,
-}
-impl MoveChain {
-    fn new(starting_player: Player) -> Self {
-        Self {
-            chain: vec![],
-            starting_player,
-        }
-    }
-    fn prepend(&mut self, m: Move) {
-        self.chain.push(m);
-        self.starting_player = self.starting_player.other();
-    }
-
-    #[must_use]
-    pub fn moves(&self) -> &Vec<Move> {
-        &self.chain
-    }
-
-    #[must_use]
-    pub fn starting_player(&self) -> Player {
-        self.starting_player
-    }
-}
+use super::move_chain::MoveChain;
 
 #[derive(Clone, Debug)]
 pub enum DFSEvaluation {
@@ -48,6 +21,7 @@ impl DFSEvaluation {
         };
         self
     }
+
     #[must_use]
     pub fn is_win(&self) -> bool {
         match self {
@@ -55,6 +29,7 @@ impl DFSEvaluation {
             DFSEvaluation::Draw(_) | DFSEvaluation::Loss(_) => false,
         }
     }
+
     fn add_move(&mut self, m: Move) {
         self.moves_mut().prepend(m);
     }
@@ -65,6 +40,7 @@ impl DFSEvaluation {
             Self::Win(x) | Self::Draw(x) | Self::Loss(x) => x,
         }
     }
+
     fn moves_mut(&mut self) -> &mut MoveChain {
         match self {
             Self::Win(x) | Self::Draw(x) | Self::Loss(x) => x,
