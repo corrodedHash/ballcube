@@ -98,7 +98,7 @@ impl Compact {
             let layer = board.layer(layer_id);
             for gate_id in 0..3 {
                 let gate = layer.gate(gate_id);
-                let mut gatebits = 1 << gate.gatetype() & 0b111;
+                let mut gatebits = (1 << gate.gatetype()) & 0b111;
                 if !gate.topleft() {
                     gatebits = mirror_gates(gatebits);
                 };

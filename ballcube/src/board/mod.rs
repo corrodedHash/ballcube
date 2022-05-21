@@ -15,6 +15,7 @@ pub struct Board {
     gates_horizontal: [bool; 4],
     gates_topleft: [[bool; 3]; 4],
     gates_silver: [[bool; 3]; 4],
+    /// 0 is the hole that gets pulled out first, 3 means no hole in the gate
     gate_type: [[u8; 3]; 4],
 }
 
