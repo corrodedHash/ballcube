@@ -1,11 +1,13 @@
+use std::cell;
+
 use ballcube::{Board, Compact, Player};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Island {
-    distance: u8,
-    ball_id: u8,
-    layer: u8,
-    gate: u8,
+    pub distance: u8,
+    pub ball_id: u8,
+    pub layer: u8,
+    pub gate: u8,
 }
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -34,13 +36,18 @@ fn relevant_balls(board: &Board, state: &Compact, layer: u8, gate: u8) -> [Optio
             .unwrap()
     };
 
-    cell_ids.map(|x| {
+    let mut dropped_cell_ids = cell_ids.map(|x| {
         if state.depth()[x as usize] > layer {
             None
         } else {
             Some(x)
         }
-    })
+    });
+
+    for (_, cell) in (0..state.get_shift(layer, gate)).zip(dropped_cell_ids.iter_mut().rev()) {
+        *cell = None;
+    }
+    dropped_cell_ids
 }
 
 #[allow(clippy::too_many_lines)]
@@ -256,5 +263,30 @@ pub fn measure_island(board: &Board, state: &Compact) -> IslandMeasure {
             }
         }
     }
+    debug_assert!(i.gold_definite.map_or(true, |x| x.distance
+        >= i.gold_heuristic
+            .expect("If we have a definite value, we need a heuristic one")
+            .distance));
+    debug_assert!(i.silver_definite.map_or(true, |x| x.distance
+        >= i.silver_heuristic
+            .expect("If we have a definite value, we need a heuristic one")
+            .distance));
     i
+}
+
+#[cfg(test)]
+mod tests {
+    use ballcube::{Board, Compact};
+
+    #[test]
+    fn test_islands() {
+        let board = Board::try_from(0x9f02_cd89_574f_2c59).unwrap();
+        let state = Compact::from_u64(0x00_0000_0000_0000_0080_31ce, &board);
+        let measurement = super::measure_island(&board, &state);
+        dbg!(measurement);
+
+        let state = Compact::from_u64(0x0000_0000_0000_0008_0080_31ce, &board);
+        let measurement = super::measure_island(&board, &state);
+        dbg!(measurement);
+    }
 }

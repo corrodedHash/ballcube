@@ -1,5 +1,7 @@
-use ballcube::{Board, Compact, Move, MoveChecker, Player, Winner, WinningChecker};
+use crate::island_finder::Island;
+
 use super::move_chain::MoveChain;
+use ballcube::{Board, Compact, Move, MoveChecker, Player, Winner, WinningChecker};
 
 #[derive(Clone, Debug)]
 pub enum DFSEvaluation {
@@ -126,6 +128,54 @@ impl<'a> DFSWinFinder<'a> {
             Winner::One(_) => return DFSEvaluation::Loss(MoveChain::new(player)),
         };
 
+        let islands = super::island_finder::measure_island(self.board, state);
+
+        let starting_player = match state
+            .shift_count()
+            .cmp(&(state.shift_count_silver(self.board) * 2))
+        {
+            std::cmp::Ordering::Less => Player::Gold,
+            std::cmp::Ordering::Equal => player,
+            std::cmp::Ordering::Greater => Player::Silver,
+        };
+
+        let has_better_island =
+            |checked_player: Player, definite: Option<Island>, heuristic: Option<Island>| {
+                definite.map_or(false, |unwrapped_definite| {
+                    heuristic.map_or(true, |unwrapped_heuristic| {
+                        unwrapped_definite.distance < unwrapped_heuristic.distance
+                            || (unwrapped_definite.distance == unwrapped_heuristic.distance
+                                && starting_player != checked_player)
+                    })
+                })
+            };
+
+        let gold_better_island = has_better_island(
+            Player::Gold,
+            islands.gold_definite,
+            islands.silver_heuristic,
+        );
+        let silver_better_island = has_better_island(
+            Player::Silver,
+            islands.silver_definite,
+            islands.gold_heuristic,
+        );
+
+        debug_assert!(!(gold_better_island && silver_better_island));
+
+        if gold_better_island {
+            return match player {
+                Player::Gold => DFSEvaluation::Win(MoveChain::new(player)),
+                Player::Silver => DFSEvaluation::Loss(MoveChain::new(player)),
+            };
+        }
+        if silver_better_island {
+            return match player {
+                Player::Gold => DFSEvaluation::Loss(MoveChain::new(player)),
+                Player::Silver => DFSEvaluation::Win(MoveChain::new(player)),
+            };
+        }
+
         let mut best_option = None;
         for m in self.move_generator.moves(state, player) {
             let mut new_state = *state;
@@ -229,9 +279,6 @@ mod test {
             check_moves(&board, &chosen_state, ev.moves());
 
             state_stack.pop();
-            if state_stack.len() <= 13 {
-                break;
-            }
         }
     }
 }
